@@ -1,7 +1,6 @@
 package dev.aulait.mousse.util;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -126,7 +125,7 @@ class RestClientTests {
 
     server.start();
     int port = server.getAddress().getPort();
-    client = new RestClient("http://localhost:" + port);
+    client = RestClient.builder().baseUrl("http://localhost:" + port).build();
   }
 
   @AfterAll
@@ -182,24 +181,6 @@ class RestClientTests {
   }
 
   @Test
-  void authorizationHeaderTest() {
-    client.setAccessToken("test-token-123");
-    try {
-      String result = client.get("/api/auth-check", String.class);
-      assertTrue(result.contains("Bearer test-token-123"));
-    } finally {
-      client.setAccessToken(null);
-    }
-  }
-
-  @Test
-  void noAuthorizationHeaderWhenTokenNullTest() {
-    client.setAccessToken(null);
-    String result = client.get("/api/auth-check", String.class);
-    assertTrue(result.contains("\"token\":\"none\""));
-  }
-
-  @Test
   void postMultipartTest() {
     java.util.Map<String, Object> parts = new java.util.LinkedHashMap<>();
     parts.put("field1", "value1");
@@ -228,13 +209,6 @@ class RestClientTests {
   void deleteTest() {
     String result = client.delete("/api/items/{id}", null, String.class, "1");
     assertEquals("\"deleted\"", result);
-  }
-
-  @Test
-  void setHeaderTest() {
-    client.setHeader("X-Custom-Header", "custom-value");
-    Item item = client.get("/api/items/{id}", Item.class, "1");
-    assertNotNull(item);
   }
 
   @Test

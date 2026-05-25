@@ -12,14 +12,16 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
-import lombok.Getter;
-import lombok.Setter;
+import java.util.function.Supplier;
+import lombok.Builder;
+import lombok.Singular;
 import lombok.extern.slf4j.Slf4j;
+import org.eclipse.microprofile.config.Config;
+import org.eclipse.microprofile.config.ConfigProvider;
 
 /**
  * HTTP REST client using {@link java.net.http.HttpClient} and Jackson for JSON serialization.
@@ -27,36 +29,17 @@ import lombok.extern.slf4j.Slf4j;
  * <p>Provides methods for GET, POST, PUT, and DELETE operations with automatic JSON
  * serialization/deserialization.
  */
+@Builder
 @Slf4j
 public class RestClient {
 
   private static final String CONTENT_DISPOSITION_PREFIX =
       "Content-Disposition: form-data; name=\"";
 
-  private final HttpClient httpClient;
-
-  @Getter @Setter private String baseUrl;
-  @Getter @Setter private String accessToken;
-  @Getter @Setter private String refreshToken;
-  private final Map<String, String> defaultHeaders = new LinkedHashMap<>();
-
-  public RestClient(String baseUrl) {
-    this.baseUrl = baseUrl;
-    this.httpClient = HttpClient.newHttpClient();
-    this.defaultHeaders.put("Content-Type", "application/json; charset=UTF-8");
-    this.defaultHeaders.put("Accept", "application/json");
-    this.defaultHeaders.put("Accept-Language", Locale.getDefault().toString().replace("_", "-"));
-  }
-
-  /**
-   * Sets a default request header.
-   *
-   * @param name the header name
-   * @param value the header value
-   */
-  public void setHeader(String name, String value) {
-    defaultHeaders.put(name, value);
-  }
+  private String baseUrl;
+  @Singular private Map<String, String> headers;
+  @Singular private Map<String, Supplier<String>> headerSuppliers;
+  @Builder.Default private HttpClient httpClient = HttpClient.newHttpClient();
 
   /**
    * Executes a GET request and returns the response body converted to the specified type.
@@ -187,10 +170,8 @@ public class RestClient {
 
   private HttpRequest.Builder newRequest(String url) {
     HttpRequest.Builder builder = HttpRequest.newBuilder().uri(URI.create(url));
-    defaultHeaders.forEach(builder::header);
-    if (accessToken != null) {
-      builder.header("Authorization", "Bearer " + accessToken);
-    }
+    headerSuppliers.forEach((key, value) -> builder.header(key, value.get()));
+    headers.forEach(builder::header);
     return builder;
   }
 
@@ -309,5 +290,52 @@ public class RestClient {
       resolved = resolved.replaceFirst("\\{[^}]+\\}", param.toString());
     }
     return baseUrl + resolved;
+  }
+
+  public static class RestClientBuilder {
+    private boolean defaultHeaders = true;
+
+    public RestClientBuilder() {
+      if (defaultHeaders) {
+        this.header("Content-Type", "application/json; charset=UTF-8");
+        this.header("Accept", "application/json");
+        this.header("Accept-Language", Locale.getDefault().toString().replace("_", "-"));
+      }
+    }
+
+    /**
+     * Sets whether to include default headers (Content-Type, Accept, Accept-Language).
+     *
+     * @param defaultHeaders true to include default headers, false to exclude them
+     * @return this builder instance for chaining
+     */
+    public RestClientBuilder defaultHeaders(boolean defaultHeaders) {
+      this.defaultHeaders = defaultHeaders;
+      return this;
+    }
+
+    /**
+     * Configures the base URL from Quarkus configuration properties:
+     *
+     * <ul>
+     *   <li>quarkus.http.host (default: localhost)
+     *   <li>quarkus.http.port (default: 8080)
+     *   <li>quarkus.rest.path (default: "")
+     * </ul>
+     *
+     * The final base URL is constructed as "http://{host}:{port}{restPath}". This is useful for
+     * testing against a Quarkus application running with the default HTTP configuration.
+     *
+     * @return this builder instance for chaining
+     */
+    public RestClientBuilder quarkus() {
+      Config config = ConfigProvider.getConfig();
+      String host = config.getOptionalValue("quarkus.http.host", String.class).orElse("localhost");
+      int port = config.getOptionalValue("quarkus.http.port", Integer.class).orElse(8080);
+      String restPath = config.getOptionalValue("quarkus.rest.path", String.class).orElse("");
+      baseUrl("http://" + host + ":" + port + restPath);
+
+      return this;
+    }
   }
 }
