@@ -46,16 +46,70 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
   </properties>
 
+  <!-- More Project Information -->
+  <name>Mousse</name>
+  <description>Mousse is a lightweight Java utility library.</description>
+  <url>https://aulait.dev</url>
+  <licenses>
+    <license>
+      <name>The Apache Software License, Version 2.0</name>
+      <url>http://www.apache.org/licenses/LICENSE-2.0.txt</url>
+      <distribution>repo</distribution>
+      <comments>A business-friendly OSS license</comments>
+    </license>
+  </licenses>
+  <developers>
+    <developer>
+      <id>yuichi.kuwahara</id>
+      <name>Yuichi Kuwahara</name>
+      <email>yuichi.kuwahara.0@gmail.com</email>
+    </developer>
+  </developers>
+
+  <!-- Build Settings -->
+  <build>
+    <defaultGoal>antrun:run</defaultGoal>
+
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-antrun-plugin</artifactId>
+        <version>3.2.0</version>
+        <inherited>false</inherited>
+        <dependencies>
+          <dependency>
+            <groupId>ant-contrib</groupId>
+            <artifactId>ant-contrib</artifactId>
+            <version>1.0b3</version>
+            <exclusions>
+              <exclusion>
+                <groupId>ant</groupId>
+                <artifactId>ant</artifactId>
+              </exclusion>
+            </exclusions>
+          </dependency>
+        </dependencies>
+        <configuration>
+          <target>
+            <ant antfile="build.xml" target="${ant.target}" />
+          </target>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+
   <!-- Environment Settings -->
+  <scm>
+    <connection>scm:git:git//github.com/project-au-lait/mousse.git</connection>
+    <developerConnection>scm:git:git//github.com/project-au-lait/mousse.git</developerConnection>
+    <url>https://github.com/project-au-lait/mousse.git</url>
+  </scm>
   <distributionManagement>
     <snapshotRepository>
-      <id>mono-snapshots-repository-local</id>
-      <url>http://sitoolkit-dev.monocrea.co.jp/nexus/repository/libs-snapshot-local</url>
+      <id>github</id>
+      <name>GitHub Project Au Lait Apache Maven Packages</name>
+      <url>https://maven.pkg.github.com/project-au-lait/mousse</url>
     </snapshotRepository>
-    <repository>
-      <id>mono-repository-local</id>
-      <url>http://sitoolkit-dev.monocrea.co.jp/nexus/repository/libs-release-local</url>
-    </repository>
   </distributionManagement>
 
   <profiles>
@@ -109,6 +163,25 @@
                 <arg>--pinentry-mode</arg>
                 <arg>loopback</arg>
               </gpgArguments>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+
+    <profile>
+      <id>maven-central</id>
+
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.sonatype.central</groupId>
+            <artifactId>central-publishing-maven-plugin</artifactId>
+            <version>0.5.0</version>
+            <extensions>true</extensions>
+            <configuration>
+              <publishingServerId>central</publishingServerId>
+              <autoPublish>true</autoPublish>
             </configuration>
           </plugin>
         </plugins>
