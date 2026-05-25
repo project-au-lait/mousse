@@ -1,0 +1,313 @@
+package dev.aulait.mousse.util;
+
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpRequest.BodyPublisher;
+import java.net.http.HttpRequest.BodyPublishers;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.UUID;
+import lombok.Getter;
+import lombok.Setter;
+import lombok.extern.slf4j.Slf4j;
+
+/**
+ * HTTP REST client using {@link java.net.http.HttpClient} and Jackson for JSON serialization.
+ *
+ * <p>Provides methods for GET, POST, PUT, and DELETE operations with automatic JSON
+ * serialization/deserialization.
+ */
+@Slf4j
+public class RestClient {
+
+  private static final String CONTENT_DISPOSITION_PREFIX =
+      "Content-Disposition: form-data; name=\"";
+
+  private final HttpClient httpClient;
+
+  @Getter @Setter private String baseUrl;
+  @Getter @Setter private String accessToken;
+  @Getter @Setter private String refreshToken;
+  private final Map<String, String> defaultHeaders = new LinkedHashMap<>();
+
+  public RestClient(String baseUrl) {
+    this.baseUrl = baseUrl;
+    this.httpClient = HttpClient.newHttpClient();
+    this.defaultHeaders.put("Content-Type", "application/json; charset=UTF-8");
+    this.defaultHeaders.put("Accept", "application/json");
+    this.defaultHeaders.put("Accept-Language", Locale.getDefault().toString().replace("_", "-"));
+  }
+
+  /**
+   * Sets a default request header.
+   *
+   * @param name the header name
+   * @param value the header value
+   */
+  public void setHeader(String name, String value) {
+    defaultHeaders.put(name, value);
+  }
+
+  /**
+   * Executes a GET request and returns the response body converted to the specified type.
+   *
+   * @param <T> the response type
+   * @param path the request path; path parameters are specified in {@code {name}} format
+   * @param responseType the class to convert the response body to
+   * @param pathParams values for path parameters, substituted in order of appearance
+   * @return the converted response object
+   * @throws RestClientException if the response status is not 2xx
+   */
+  public <T> T get(String path, Class<T> responseType, Object... pathParams) {
+    HttpRequest request = newRequest(resolvePath(path, pathParams)).GET().build();
+    return convertResponse(executeAsString(request), responseType);
+  }
+
+  /**
+   * Executes a GET request and returns the response body converted to a list.
+   *
+   * @param <T> the list element type
+   * @param path the request path; path parameters are specified in {@code {name}} format
+   * @param typeRef the type reference for the response body
+   * @param pathParams values for path parameters, substituted in order of appearance
+   * @return the converted list
+   * @throws RestClientException if the response status is not 2xx
+   */
+  public <T> List<T> getAsList(String path, JsonType<List<T>> typeRef, Object... pathParams) {
+    HttpRequest request = newRequest(resolvePath(path, pathParams)).GET().build();
+    return JsonUtils.str2obj(executeAsString(request), typeRef);
+  }
+
+  /**
+   * Executes a GET request and returns the response body as a byte array.
+   *
+   * @param path the request path; path parameters are specified in {@code {name}} format
+   * @param pathParams values for path parameters, substituted in order of appearance
+   * @return the response body as a byte array
+   * @throws RestClientException if the response status is not 2xx
+   */
+  public byte[] getAsByte(String path, Object... pathParams) {
+    HttpRequest request = newRequest(resolvePath(path, pathParams)).GET().build();
+    return executeAsBytes(request);
+  }
+
+  /**
+   * Executes a POST request and returns the response body converted to the specified type.
+   *
+   * @param <T> the response type
+   * @param path the request path; path parameters are specified in {@code {name}} format
+   * @param requestBody the request body, serialized to JSON; {@code null} sends no body
+   * @param responseType the class to convert the response body to
+   * @param pathParams values for path parameters, substituted in order of appearance
+   * @return the converted response object
+   * @throws RestClientException if the response status is not 2xx
+   */
+  public <T> T post(String path, Object requestBody, Class<T> responseType, Object... pathParams) {
+    HttpRequest request =
+        newRequest(resolvePath(path, pathParams)).POST(toBodyPublisher(requestBody)).build();
+    return convertResponse(executeAsString(request), responseType);
+  }
+
+  /**
+   * Executes a multipart/form-data POST request and returns the response body converted to the
+   * specified type.
+   *
+   * <p>Each part value may be one of the following types:
+   *
+   * <ul>
+   *   <li>{@link Path} &mdash; sent as a file
+   *   <li>{@code byte[]} &mdash; sent as binary data
+   *   <li>any other type &mdash; sent as text using {@code toString()}
+   * </ul>
+   *
+   * @param <T> the response type
+   * @param path the request path; path parameters are specified in {@code {name}} format
+   * @param parts a map of part names to part values
+   * @param responseType the class to convert the response body to
+   * @param pathParams values for path parameters, substituted in order of appearance
+   * @return the converted response object
+   * @throws RestClientException if the response status is not 2xx
+   * @throws UncheckedIOException if reading a file part fails
+   */
+  public <T> T postMultipart(
+      String path, Map<String, Object> parts, Class<T> responseType, Object... pathParams) {
+    String boundary = UUID.randomUUID().toString();
+    HttpRequest.Builder builder = newRequest(resolvePath(path, pathParams));
+    builder.setHeader("Content-Type", "multipart/form-data; boundary=" + boundary);
+    HttpRequest request = builder.POST(toMultipartBodyPublisher(parts, boundary)).build();
+    return convertResponse(executeAsString(request), responseType);
+  }
+
+  /**
+   * Executes a PUT request and returns the response body converted to the specified type.
+   *
+   * @param <T> the response type
+   * @param path the request path; path parameters are specified in {@code {name}} format
+   * @param requestBody the request body, serialized to JSON; {@code null} sends no body
+   * @param responseType the class to convert the response body to
+   * @param pathParams values for path parameters, substituted in order of appearance
+   * @return the converted response object
+   * @throws RestClientException if the response status is not 2xx
+   */
+  public <T> T put(String path, Object requestBody, Class<T> responseType, Object... pathParams) {
+    HttpRequest request =
+        newRequest(resolvePath(path, pathParams)).PUT(toBodyPublisher(requestBody)).build();
+    return convertResponse(executeAsString(request), responseType);
+  }
+
+  /**
+   * Executes a DELETE request and returns the response body converted to the specified type.
+   *
+   * @param <T> the response type
+   * @param path the request path; path parameters are specified in {@code {name}} format
+   * @param requestBody the request body, serialized to JSON; {@code null} sends no body
+   * @param responseType the class to convert the response body to
+   * @param pathParams values for path parameters, substituted in order of appearance
+   * @return the converted response object
+   * @throws RestClientException if the response status is not 2xx
+   */
+  public <T> T delete(
+      String path, Object requestBody, Class<T> responseType, Object... pathParams) {
+    HttpRequest request =
+        newRequest(resolvePath(path, pathParams))
+            .method("DELETE", toBodyPublisher(requestBody))
+            .build();
+    return convertResponse(executeAsString(request), responseType);
+  }
+
+  private HttpRequest.Builder newRequest(String url) {
+    HttpRequest.Builder builder = HttpRequest.newBuilder().uri(URI.create(url));
+    defaultHeaders.forEach(builder::header);
+    if (accessToken != null) {
+      builder.header("Authorization", "Bearer " + accessToken);
+    }
+    return builder;
+  }
+
+  private BodyPublisher toBodyPublisher(Object body) {
+    if (body == null) {
+      return BodyPublishers.noBody();
+    }
+    return BodyPublishers.ofString(JsonUtils.obj2str(body), StandardCharsets.UTF_8);
+  }
+
+  private BodyPublisher toMultipartBodyPublisher(Map<String, Object> parts, String boundary) {
+    try {
+      ByteArrayOutputStream baos = new ByteArrayOutputStream();
+      for (Map.Entry<String, Object> entry : parts.entrySet()) {
+        baos.write(("--" + boundary + "\r\n").getBytes(StandardCharsets.UTF_8));
+        if (entry.getValue() instanceof Path filePath) {
+          String mimeType = Files.probeContentType(filePath);
+          if (mimeType == null) {
+            mimeType = "application/octet-stream";
+          }
+          baos.write(
+              (CONTENT_DISPOSITION_PREFIX
+                      + entry.getKey()
+                      + "\"; filename=\""
+                      + filePath.getFileName()
+                      + "\"\r\n")
+                  .getBytes(StandardCharsets.UTF_8));
+          baos.write(("Content-Type: " + mimeType + "\r\n\r\n").getBytes(StandardCharsets.UTF_8));
+          baos.write(Files.readAllBytes(filePath));
+        } else if (entry.getValue() instanceof byte[] bytes) {
+          baos.write(
+              (CONTENT_DISPOSITION_PREFIX
+                      + entry.getKey()
+                      + "\"; filename=\""
+                      + entry.getKey()
+                      + "\"\r\n")
+                  .getBytes(StandardCharsets.UTF_8));
+          baos.write(
+              "Content-Type: application/octet-stream\r\n\r\n".getBytes(StandardCharsets.UTF_8));
+          baos.write(bytes);
+        } else {
+          baos.write(
+              (CONTENT_DISPOSITION_PREFIX + entry.getKey() + "\"\r\n\r\n")
+                  .getBytes(StandardCharsets.UTF_8));
+          baos.write(entry.getValue().toString().getBytes(StandardCharsets.UTF_8));
+        }
+        baos.write("\r\n".getBytes(StandardCharsets.UTF_8));
+      }
+      baos.write(("--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8));
+      return BodyPublishers.ofByteArray(baos.toByteArray());
+    } catch (IOException e) {
+      throw new UncheckedIOException(e);
+    }
+  }
+
+  private String executeAsString(HttpRequest request) {
+    HttpResponse<String> response =
+        execute(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+    if (response.statusCode() < 200 || response.statusCode() >= 300) {
+      throw new RestClientException(response.statusCode(), response.body());
+    }
+    return response.body();
+  }
+
+  private byte[] executeAsBytes(HttpRequest request) {
+    HttpResponse<byte[]> response = execute(request, HttpResponse.BodyHandlers.ofByteArray());
+    if (response.statusCode() < 200 || response.statusCode() >= 300) {
+      throw new RestClientException(
+          response.statusCode(), new String(response.body(), StandardCharsets.UTF_8));
+    }
+    return response.body();
+  }
+
+  private <T> HttpResponse<T> execute(
+      HttpRequest request, HttpResponse.BodyHandler<T> bodyHandler) {
+    try {
+      log.debug("{} {}", request.method(), request.uri());
+
+      HttpResponse<T> response = httpClient.send(request, bodyHandler);
+
+      log.debug("Status: {}", response.statusCode());
+
+      return response;
+    } catch (IOException e) {
+      throw new RestClientException(e);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new RestClientException(e);
+    }
+  }
+
+  @SuppressWarnings("unchecked")
+  <T> T convertResponse(String body, Class<T> responseType) {
+    if (responseType == Void.class || responseType == void.class) {
+      return null;
+    } else if (responseType == String.class) {
+      return (T) body;
+    } else if (responseType == Integer.class) {
+      return (T) Integer.valueOf(body.trim());
+    } else if (responseType == Long.class) {
+      return (T) Long.valueOf(body.trim());
+    } else if (responseType == UUID.class) {
+      String value = body.trim();
+      if (value.startsWith("\"") && value.endsWith("\"")) {
+        value = value.substring(1, value.length() - 1);
+      }
+      return (T) UUID.fromString(value);
+    } else {
+      return JsonUtils.str2obj(body, responseType);
+    }
+  }
+
+  String resolvePath(String path, Object... pathParams) {
+    String resolved = path;
+    for (Object param : pathParams) {
+      resolved = resolved.replaceFirst("\\{[^}]+\\}", param.toString());
+    }
+    return baseUrl + resolved;
+  }
+}

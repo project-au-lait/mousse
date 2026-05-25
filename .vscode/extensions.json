@@ -1,0 +1,13 @@
+{
+  "recommendations": [
+    "esbenp.prettier-vscode",
+    "josevseb.google-java-format-for-vs-code",
+    "mechatroner.rainbow-csv",
+    "mhutchie.git-graph",
+    "redhat.vscode-xml",
+    "redhat.vscode-yaml",
+    "sonarsource.sonarlint-vscode",
+    "vscjava.vscode-java-pack",
+    "vscjava.vscode-lombok"
+  ]
+}
