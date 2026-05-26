@@ -15,9 +15,11 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Supplier;
 import lombok.Builder;
+import lombok.Getter;
 import lombok.Singular;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.microprofile.config.Config;
@@ -36,10 +38,17 @@ public class RestClient {
   private static final String CONTENT_DISPOSITION_PREFIX =
       "Content-Disposition: form-data; name=\"";
 
-  private String baseUrl;
-  @Singular private Map<String, String> headers;
-  @Singular private Map<String, Supplier<String>> headerSuppliers;
-  @Builder.Default private HttpClient httpClient = HttpClient.newHttpClient();
+  @Getter private String baseUrl;
+  @Getter @Singular private Map<String, String> headers;
+  @Getter @Singular private Map<String, Supplier<String>> headerSuppliers;
+  @Getter @Builder.Default private HttpClient httpClient = HttpClient.newHttpClient();
+
+  /**
+   * If true, non-2xx response statuses will not throw an exception. The response body can be
+   * checked for error details. Default is false, meaning that non-success statuses will throw a
+   * {@link RestClientException}.
+   */
+  @Getter private boolean allowNonSuccessStatus;
 
   /**
    * Executes a GET request and returns the response body converted to the specified type.
@@ -170,7 +179,13 @@ public class RestClient {
 
   private HttpRequest.Builder newRequest(String url) {
     HttpRequest.Builder builder = HttpRequest.newBuilder().uri(URI.create(url));
-    headerSuppliers.forEach((key, value) -> builder.header(key, value.get()));
+    headerSuppliers.forEach(
+        (key, value) -> {
+          String v = value.get();
+          if (v != null && !v.isEmpty()) {
+            builder.header(key, v);
+          }
+        });
     headers.forEach(builder::header);
     return builder;
   }
@@ -230,18 +245,13 @@ public class RestClient {
   private String executeAsString(HttpRequest request) {
     HttpResponse<String> response =
         execute(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-    if (response.statusCode() < 200 || response.statusCode() >= 300) {
-      throw new RestClientException(response.statusCode(), response.body());
-    }
+    handleResponse(response);
     return response.body();
   }
 
   private byte[] executeAsBytes(HttpRequest request) {
     HttpResponse<byte[]> response = execute(request, HttpResponse.BodyHandlers.ofByteArray());
-    if (response.statusCode() < 200 || response.statusCode() >= 300) {
-      throw new RestClientException(
-          response.statusCode(), new String(response.body(), StandardCharsets.UTF_8));
-    }
+    handleResponse(response);
     return response.body();
   }
 
@@ -260,6 +270,15 @@ public class RestClient {
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
       throw new RestClientException(e);
+    }
+  }
+
+  private void handleResponse(HttpResponse<?> response) {
+    if (allowNonSuccessStatus) {
+      return;
+    }
+    if (response.statusCode() < 200 || response.statusCode() >= 300) {
+      throw new RestClientException(response.statusCode(), Objects.toString(response.body()));
     }
   }
 
@@ -286,9 +305,15 @@ public class RestClient {
 
   String resolvePath(String path, Object... pathParams) {
     String resolved = path;
+
+    if (baseUrl != null && baseUrl.endsWith("/") && resolved.startsWith("/")) {
+      resolved = resolved.substring(1);
+    }
+
     for (Object param : pathParams) {
       resolved = resolved.replaceFirst("\\{[^}]+\\}", param.toString());
     }
+
     return baseUrl + resolved;
   }
 
@@ -298,7 +323,7 @@ public class RestClient {
     public RestClientBuilder() {
       if (defaultHeaders) {
         this.header("Content-Type", "application/json; charset=UTF-8");
-        this.header("Accept", "application/json");
+        this.header("Accept", "*/*");
         this.header("Accept-Language", Locale.getDefault().toString().replace("_", "-"));
       }
     }
@@ -332,7 +357,7 @@ public class RestClient {
       Config config = ConfigProvider.getConfig();
       String host = config.getOptionalValue("quarkus.http.host", String.class).orElse("localhost");
       int port = config.getOptionalValue("quarkus.http.port", Integer.class).orElse(8080);
-      String restPath = config.getOptionalValue("quarkus.rest.path", String.class).orElse("");
+      String restPath = config.getOptionalValue("quarkus.rest.path", String.class).orElse("/");
       baseUrl("http://" + host + ":" + port + restPath);
 
       return this;
