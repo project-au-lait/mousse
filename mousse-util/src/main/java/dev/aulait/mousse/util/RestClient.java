@@ -350,11 +350,19 @@ public class RestClient {
     }
   }
 
-  String resolvePath(String path, Object... pathParams) {
+  private String resolvePath(String path, Object... pathParams) {
+    return resolvePath(baseUrl, path, pathParams);
+  }
+
+  String resolvePath(String baseUrl, String path, Object... pathParams) {
     String resolved = path;
 
-    if (baseUrl != null && baseUrl.endsWith("/") && resolved.startsWith("/")) {
-      resolved = resolved.substring(1);
+    if (baseUrl != null) {
+      if (baseUrl.endsWith("/") && resolved.startsWith("/")) {
+        resolved = resolved.substring(1);
+      } else if (!baseUrl.endsWith("/") && !resolved.startsWith("/")) {
+        resolved = "/" + resolved;
+      }
     }
 
     for (Object param : pathParams) {

@@ -213,8 +213,17 @@ class RestClientTests {
 
   @Test
   void resolvePathTest() {
-    String resolved = client.resolvePath("/api/{resource}/{id}", "items", "123");
+    String resolved = client.resolvePath(null, "/api/{resource}/{id}", "items", "123");
     assertTrue(resolved.endsWith("/api/items/123"));
+
+    resolved = client.resolvePath("host", "/api/path");
+    assertEquals("host/api/path", resolved);
+
+    resolved = client.resolvePath("host/", "/api/path");
+    assertEquals("host/api/path", resolved);
+
+    resolved = client.resolvePath("host", "api/path");
+    assertEquals("host/api/path", resolved);
   }
 
   @Test
