@@ -12,6 +12,7 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
@@ -40,9 +41,10 @@ public class RestClient {
       "Content-Disposition: form-data; name=\"";
 
   @Getter private String baseUrl;
+  @Getter @Builder.Default private long connectTimeoutMillis = 5000L;
   @Getter @Singular private Map<String, String> headers;
   @Getter @Singular private Map<String, Supplier<String>> headerSuppliers;
-  @Getter @Builder.Default private HttpClient httpClient = HttpClient.newHttpClient();
+  @Getter private HttpClient httpClient;
 
   /**
    * If true, non-2xx response statuses will not throw an exception. The response body can be
@@ -269,7 +271,7 @@ public class RestClient {
     try {
       log.debug("{} {}", request.method(), request.uri());
 
-      HttpResponse<T> response = httpClient.send(request, bodyHandler);
+      HttpResponse<T> response = getHttpClientWithInit().send(request, bodyHandler);
 
       log.debug("Status: {}", response.statusCode());
 
@@ -280,6 +282,14 @@ public class RestClient {
       Thread.currentThread().interrupt();
       throw new RestClientException(e);
     }
+  }
+
+  private synchronized HttpClient getHttpClientWithInit() {
+    if (httpClient == null) {
+      httpClient =
+          HttpClient.newBuilder().connectTimeout(Duration.ofMillis(connectTimeoutMillis)).build();
+    }
+    return httpClient;
   }
 
   @SuppressWarnings("unchecked")
@@ -302,6 +312,7 @@ public class RestClient {
     }
   }
 
+  @SuppressWarnings("unchecked")
   private <T> void convertResponse(ResponseWrapper<T> response) {
     if (response.getParsedBody() == null) {
       response.setPlainBody(Objects.toString(response.getResponse().body()));
