@@ -189,13 +189,6 @@ public class RestClient {
             builder.header(key, v);
           }
         });
-    headerSuppliers.forEach(
-        (key, value) -> {
-          String v = value.get();
-          if (v != null && !v.isEmpty()) {
-            builder.header(key, v);
-          }
-        });
     headers.forEach(builder::header);
     return builder;
   }
@@ -378,7 +371,6 @@ public class RestClient {
     public RestClientBuilder() {
       if (defaultHeaders) {
         this.header("Content-Type", "application/json; charset=UTF-8");
-        this.header("Accept", "*/*");
         this.header("Accept", "*/*");
         this.header("Accept-Language", Locale.getDefault().toString().replace("_", "-"));
       }
