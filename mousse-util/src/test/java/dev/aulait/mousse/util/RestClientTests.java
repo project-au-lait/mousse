@@ -166,7 +166,7 @@ class RestClientTests {
 
   @Test
   void getAsListTest() {
-    List<Item> items = client.getAsList("/api/items-list", new JsonType<List<Item>>() {});
+    List<Item> items = client.get("/api/items-list", new JsonType<List<Item>>() {});
     assertEquals(2, items.size());
     assertEquals("1", items.get(0).getId());
     assertEquals("2", items.get(1).getId());

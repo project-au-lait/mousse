@@ -12,14 +12,15 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.function.Supplier;
 import lombok.Builder;
+import lombok.Data;
 import lombok.Getter;
+import lombok.RequiredArgsConstructor;
 import lombok.Singular;
 import lombok.extern.slf4j.Slf4j;
 import org.eclipse.microprofile.config.Config;
@@ -62,7 +63,7 @@ public class RestClient {
    */
   public <T> T get(String path, Class<T> responseType, Object... pathParams) {
     HttpRequest request = newRequest(resolvePath(path, pathParams)).GET().build();
-    return convertResponse(executeAsString(request), responseType);
+    return execute(request, new ResponseType<>(responseType)).getParsedBody();
   }
 
   /**
@@ -75,9 +76,9 @@ public class RestClient {
    * @return the converted list
    * @throws RestClientException if the response status is not 2xx
    */
-  public <T> List<T> getAsList(String path, JsonType<List<T>> typeRef, Object... pathParams) {
+  public <T> T get(String path, JsonType<T> typeRef, Object... pathParams) {
     HttpRequest request = newRequest(resolvePath(path, pathParams)).GET().build();
-    return JsonUtils.str2obj(executeAsString(request), typeRef);
+    return execute(request, new ResponseType<>(typeRef)).getParsedBody();
   }
 
   /**
@@ -107,7 +108,7 @@ public class RestClient {
   public <T> T post(String path, Object requestBody, Class<T> responseType, Object... pathParams) {
     HttpRequest request =
         newRequest(resolvePath(path, pathParams)).POST(toBodyPublisher(requestBody)).build();
-    return convertResponse(executeAsString(request), responseType);
+    return execute(request, new ResponseType<>(responseType)).getParsedBody();
   }
 
   /**
@@ -137,7 +138,7 @@ public class RestClient {
     HttpRequest.Builder builder = newRequest(resolvePath(path, pathParams));
     builder.setHeader("Content-Type", "multipart/form-data; boundary=" + boundary);
     HttpRequest request = builder.POST(toMultipartBodyPublisher(parts, boundary)).build();
-    return convertResponse(executeAsString(request), responseType);
+    return execute(request, new ResponseType<>(responseType)).getParsedBody();
   }
 
   /**
@@ -154,7 +155,7 @@ public class RestClient {
   public <T> T put(String path, Object requestBody, Class<T> responseType, Object... pathParams) {
     HttpRequest request =
         newRequest(resolvePath(path, pathParams)).PUT(toBodyPublisher(requestBody)).build();
-    return convertResponse(executeAsString(request), responseType);
+    return execute(request, new ResponseType<>(responseType)).getParsedBody();
   }
 
   /**
@@ -174,11 +175,18 @@ public class RestClient {
         newRequest(resolvePath(path, pathParams))
             .method("DELETE", toBodyPublisher(requestBody))
             .build();
-    return convertResponse(executeAsString(request), responseType);
+    return execute(request, new ResponseType<>(responseType)).getParsedBody();
   }
 
   private HttpRequest.Builder newRequest(String url) {
     HttpRequest.Builder builder = HttpRequest.newBuilder().uri(URI.create(url));
+    headerSuppliers.forEach(
+        (key, value) -> {
+          String v = value.get();
+          if (v != null && !v.isEmpty()) {
+            builder.header(key, v);
+          }
+        });
     headerSuppliers.forEach(
         (key, value) -> {
           String v = value.get();
@@ -242,21 +250,22 @@ public class RestClient {
     }
   }
 
-  private String executeAsString(HttpRequest request) {
-    HttpResponse<String> response =
-        execute(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+  private <T> ResponseWrapper<T> execute(HttpRequest request, ResponseType<T> responseType) {
+    ResponseWrapper<T> response = send(request, responseType);
     handleResponse(response);
-    return response.body();
+    convertResponse(response);
+    return response;
   }
 
   private byte[] executeAsBytes(HttpRequest request) {
-    HttpResponse<byte[]> response = execute(request, HttpResponse.BodyHandlers.ofByteArray());
+    ResponseWrapper<byte[]> response = send(request, new ResponseType<>(byte[].class));
     handleResponse(response);
-    return response.body();
+    return response.getResponse().body();
   }
 
-  private <T> HttpResponse<T> execute(
-      HttpRequest request, HttpResponse.BodyHandler<T> bodyHandler) {
+  private <T> ResponseWrapper<T> send(HttpRequest request, ResponseType<T> responseType) {
+    HttpResponse.BodyHandler<T> bodyHandler = bodyHandler(responseType.getType());
+
     try {
       log.debug("{} {}", request.method(), request.uri());
 
@@ -264,7 +273,7 @@ public class RestClient {
 
       log.debug("Status: {}", response.statusCode());
 
-      return response;
+      return new ResponseWrapper<>(responseType, response);
     } catch (IOException e) {
       throw new RestClientException(e);
     } catch (InterruptedException e) {
@@ -273,33 +282,60 @@ public class RestClient {
     }
   }
 
-  private void handleResponse(HttpResponse<?> response) {
+  @SuppressWarnings("unchecked")
+  private <T> HttpResponse.BodyHandler<T> bodyHandler(Class<T> responseType) {
+    if (responseType == byte[].class) {
+      return (HttpResponse.BodyHandler<T>) HttpResponse.BodyHandlers.ofByteArray();
+    } else {
+      return (HttpResponse.BodyHandler<T>)
+          HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8);
+    }
+  }
+
+  private void handleResponse(ResponseWrapper<?> response) {
     if (allowNonSuccessStatus) {
       return;
     }
-    if (response.statusCode() < 200 || response.statusCode() >= 300) {
-      throw new RestClientException(response.statusCode(), Objects.toString(response.body()));
+    if (response.getResponse().statusCode() < 200 || response.getResponse().statusCode() >= 300) {
+      throw new RestClientException(
+          response.getResponse().statusCode(), Objects.toString(response.getResponse().body()));
+    }
+  }
+
+  private <T> void convertResponse(ResponseWrapper<T> response) {
+    if (response.getParsedBody() == null) {
+      response.setPlainBody(Objects.toString(response.getResponse().body()));
+
+      if (response.getResponseType().getType() == HttpResponse.class) {
+        response.setParsedBody((T) response.getResponse());
+      } else {
+        response.setParsedBody(
+            convertResponse(response.getPlainBody(), response.getResponseType()));
+      }
     }
   }
 
   @SuppressWarnings("unchecked")
-  <T> T convertResponse(String body, Class<T> responseType) {
-    if (responseType == Void.class || responseType == void.class) {
+  <T> T convertResponse(String body, ResponseType<T> responseType) {
+    Class<T> type = responseType.getType();
+    if (type == Void.class || type == void.class) {
       return null;
-    } else if (responseType == String.class) {
+    } else if (type == String.class) {
       return (T) body;
-    } else if (responseType == Integer.class) {
+    } else if (type == Integer.class) {
       return (T) Integer.valueOf(body.trim());
-    } else if (responseType == Long.class) {
+    } else if (type == Long.class) {
       return (T) Long.valueOf(body.trim());
-    } else if (responseType == UUID.class) {
+    } else if (type == UUID.class) {
       String value = body.trim();
       if (value.startsWith("\"") && value.endsWith("\"")) {
         value = value.substring(1, value.length() - 1);
       }
       return (T) UUID.fromString(value);
+    } else if (responseType.getJsonType() != null) {
+      return JsonUtils.str2obj(body, responseType.getJsonType());
     } else {
-      return JsonUtils.str2obj(body, responseType);
+      return JsonUtils.str2obj(body, type);
     }
   }
 
@@ -323,6 +359,7 @@ public class RestClient {
     public RestClientBuilder() {
       if (defaultHeaders) {
         this.header("Content-Type", "application/json; charset=UTF-8");
+        this.header("Accept", "*/*");
         this.header("Accept", "*/*");
         this.header("Accept-Language", Locale.getDefault().toString().replace("_", "-"));
       }
@@ -362,5 +399,28 @@ public class RestClient {
 
       return this;
     }
+  }
+
+  @Data
+  private static class ResponseType<T> {
+    private Class<T> type;
+    private JsonType<T> jsonType;
+
+    ResponseType(Class<T> type) {
+      this.type = type;
+    }
+
+    ResponseType(JsonType<T> jsonType) {
+      this.jsonType = jsonType;
+    }
+  }
+
+  @Data
+  @RequiredArgsConstructor
+  private class ResponseWrapper<T> {
+    private final ResponseType<T> responseType;
+    private final HttpResponse<T> response;
+    private String plainBody;
+    private T parsedBody;
   }
 }
