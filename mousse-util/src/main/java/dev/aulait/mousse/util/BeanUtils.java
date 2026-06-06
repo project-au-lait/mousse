@@ -18,6 +18,10 @@ public class BeanUtils {
 
   private static final ModelMapper MAPPER = new ModelMapper();
 
+  static {
+    MAPPER.getConfiguration().setAmbiguityIgnored(true);
+  }
+
   /**
    * Configures the ModelMapper instance using the provided configurator.
    *
