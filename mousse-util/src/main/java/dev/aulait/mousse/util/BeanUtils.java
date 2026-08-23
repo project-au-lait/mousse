@@ -111,11 +111,91 @@ public class BeanUtils {
   }
 
   /**
-   * Registers a type map between the source and destination types with the specified name.
+   * Creates a type map between the source and destination types.
    *
    * <pre>{@code
    * // Example:
-   * TypeMap<BeanX, BeanY> typeMap = BeanUtils.registerTypeMap(BeanX.class, BeanY.class, "BeanXToBeanY");
+   * TypeMap<BeanX, BeanY> typeMap = BeanUtils.createTypeMap(BeanX.class, BeanY.class);
+   * typeMap.addMappings(mapper -> mapper.skip(BeanY::setName));
+   *
+   * BeanX src = BeanX.of("id", "name");
+   * BeanY dst = BeanUtils.map(src, BeanY.class);
+   *
+   * // Results:
+   * // dst.getId() == "id"
+   * // dst.getName() == null
+   * }</pre>
+   *
+   * @param <S> the type of the source object
+   * @param <D> the type of the destination object
+   * @param srcType the class of the source type
+   * @param dstType the class of the destination type
+   * @return the created TypeMap instance
+   */
+  public static <S, D> TypeMap<S, D> createTypeMap(Class<S> srcType, Class<D> dstType) {
+    return MAPPER.createTypeMap(srcType, dstType);
+  }
+
+  /**
+   * Creates a type map between the source and destination types with the specified name.
+   *
+   * <pre>{@code
+   * // Example:
+   * TypeMap<BeanX, BeanY> typeMap = BeanUtils.createTypeMap(BeanX.class, BeanY.class, "BeanXToBeanY");
+   * typeMap.addMappings(mapper -> mapper.skip(BeanY::setName));
+   *
+   * BeanX src = BeanX.of("id", "name");
+   * BeanY dst = BeanUtils.map(src, BeanY.class, "BeanXToBeanY");
+   *
+   * // Results:
+   * // dst.getId() == "id"
+   * // dst.getName() == null
+   * }</pre>
+   *
+   * @param <S> the type of the source object
+   * @param <D> the type of the destination object
+   * @param srcType the class of the source type
+   * @param dstType the class of the destination type
+   * @param typeMapName the name of the type map to be created
+   * @return the created TypeMap instance
+   */
+  public static <S, D> TypeMap<S, D> createTypeMap(
+      Class<S> srcType, Class<D> dstType, String typeMapName) {
+    return MAPPER.createTypeMap(srcType, dstType, typeMapName);
+  }
+
+  /**
+   * Creates an empty type map between the source and destination types.
+   *
+   * <pre>{@code
+   * // Example:
+   * TypeMap<BeanX, BeanY> typeMap = BeanUtils.emptyTypeMap(BeanX.class, BeanY.class);
+   * typeMap.addMappings(mapper -> mapper.skip(BeanY::setName)).implicitMappings();
+   *
+   * BeanX src = BeanX.of("id", "name");
+   * BeanY dst = BeanUtils.map(src, BeanY.class);
+   *
+   * // Results:
+   * // dst.getId() == "id"
+   * // dst.getName() == null
+   * }</pre>
+   *
+   * @param <S> the type of the source object
+   * @param <D> the type of the destination object
+   * @param srcType the class of the source type
+   * @param dstType the class of the destination type
+   * @return the created TypeMap instance
+   */
+  public static <S, D> TypeMap<S, D> emptyTypeMap(Class<S> srcType, Class<D> dstType) {
+    return MAPPER.emptyTypeMap(srcType, dstType);
+  }
+
+  /**
+   * Creates an empty type map between the source and destination types with the specified name.
+   *
+   * <pre>{@code
+   * // Example:
+   * TypeMap<BeanX, BeanY> typeMap = BeanUtils.emptyTypeMap(BeanX.class, BeanY.class, "BeanXToBeanY");
    * typeMap.addMappings(mapper -> mapper.skip(BeanY::setName)).implicitMappings();
    *
    * BeanX src = BeanX.of("id", "name");
@@ -130,10 +210,10 @@ public class BeanUtils {
    * @param <D> the type of the destination object
    * @param srcType the class of the source type
    * @param dstType the class of the destination type
-   * @param typeMapName the name of the type map to be registered
-   * @return the registered TypeMap instance
+   * @param typeMapName the name of the type map to be created
+   * @return the created TypeMap instance
    */
-  public static <S, D> TypeMap<S, D> registerTypeMap(
+  public static <S, D> TypeMap<S, D> emptyTypeMap(
       Class<S> srcType, Class<D> dstType, String typeMapName) {
     return MAPPER.emptyTypeMap(srcType, dstType, typeMapName);
   }

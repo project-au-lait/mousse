@@ -28,7 +28,7 @@ class BeanUtilsTests {
   @Test
   void typeMapWithSkipTest() {
     String typeMapName = "BeanXToBeanY";
-    BeanUtils.registerTypeMap(BeanX.class, BeanY.class, typeMapName)
+    BeanUtils.emptyTypeMap(BeanX.class, BeanY.class, typeMapName)
         .addMappings(mapper -> mapper.skip(BeanY::setName))
         .implicitMappings();
 
