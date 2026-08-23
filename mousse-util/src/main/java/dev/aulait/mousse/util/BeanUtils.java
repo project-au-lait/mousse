@@ -1,11 +1,14 @@
 package dev.aulait.mousse.util;
 
+import java.util.Collection;
 import java.util.function.Consumer;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
+import org.modelmapper.Condition;
 import org.modelmapper.ModelMapper;
 import org.modelmapper.TypeMap;
 import org.modelmapper.TypeToken;
+import org.modelmapper.spi.MappingContext;
 
 /**
  * Utility class for mapping Java beans using ModelMapper.
@@ -16,10 +19,33 @@ import org.modelmapper.TypeToken;
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class BeanUtils {
 
-  private static final ModelMapper MAPPER = new ModelMapper();
+  private static final ModelMapper MAPPER = buildDefaultMapper();
 
-  static {
-    MAPPER.getConfiguration().setAmbiguityIgnored(true);
+  @SuppressWarnings("squid:S1604")
+  private static final Condition<?, ?> primitiveAndStringCondition =
+      new Condition<Object, Object>() {
+        @Override
+        public boolean applies(MappingContext<Object, Object> context) {
+          Class<?> sourceType = context.getSourceType();
+
+          if (sourceType == null) {
+            return false;
+          }
+
+          return !Collection.class.isAssignableFrom(sourceType);
+        }
+      };
+
+  private static final ModelMapper FLAT_MAPPER = buildDefaultFlatMapper();
+
+  private static ModelMapper buildDefaultMapper() {
+    return new ModelMapper();
+  }
+
+  private static ModelMapper buildDefaultFlatMapper() {
+    ModelMapper mapper = buildDefaultMapper();
+    mapper.getConfiguration().setPropertyCondition(primitiveAndStringCondition);
+    return mapper;
   }
 
   /**
@@ -29,6 +55,7 @@ public class BeanUtils {
    */
   public static void configure(Consumer<ModelMapper> configurator) {
     configurator.accept(MAPPER);
+    configurator.accept(FLAT_MAPPER);
   }
 
   /**
@@ -108,6 +135,19 @@ public class BeanUtils {
    */
   public static <T> T map(Object src, BeanType<T> dstType, String typeMapName) {
     return MAPPER.map(src, dstType.getType(), typeMapName);
+  }
+
+  /**
+   * Maps the source object to an instance of the specified destination type using the flat mapper,
+   * which only maps primitive and String properties and ignores collections and complex types.
+   *
+   * @param <T> the type of the destination object
+   * @param src the source object to be mapped
+   * @param dstType the class of the destination type
+   * @return an instance of the destination type with the mapped values from the source object
+   */
+  public static <T> T flatMap(Object src, Class<T> dstType) {
+    return FLAT_MAPPER.map(src, dstType);
   }
 
   /**

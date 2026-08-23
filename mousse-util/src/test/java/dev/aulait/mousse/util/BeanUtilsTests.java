@@ -1,6 +1,7 @@
 package dev.aulait.mousse.util;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 import dev.aulait.mousse.util.BeanUtils.BeanType;
 import java.util.List;
@@ -39,6 +40,16 @@ class BeanUtilsTests {
     assertEquals(null, dst.getName());
   }
 
+  @Test
+  void flatMapTest() {
+    BeanX src = BeanX.of("id", "name", List.of("tag1", "tag2"));
+    BeanY dst = BeanUtils.flatMap(src, BeanY.class);
+
+    assertEquals(src.getId(), dst.getId());
+    assertEquals(src.getName(), dst.getName());
+    assertNull(dst.getTags());
+  }
+
   @AllArgsConstructor
   @Builder
   @Data
@@ -46,9 +57,14 @@ class BeanUtilsTests {
   static class BeanX {
     String id;
     String name;
+    List<String> tags;
 
     static BeanX of(String id, String name) {
       return BeanX.builder().id(id).name(name).build();
+    }
+
+    static BeanX of(String id, String name, List<String> tags) {
+      return BeanX.builder().id(id).name(name).tags(tags).build();
     }
   }
 
@@ -59,6 +75,7 @@ class BeanUtilsTests {
   static class BeanY {
     String id;
     String name;
+    List<String> tags;
 
     static BeanY of(String id, String name) {
       return BeanY.builder().id(id).name(name).build();
