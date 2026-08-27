@@ -65,7 +65,7 @@ public class RestClient {
    */
   public <T> T get(String path, Class<T> responseType, Object... pathParams) {
     HttpRequest request = newRequest(resolvePath(path, pathParams)).GET().build();
-    return execute(request, new ResponseType<>(responseType)).getParsedBody();
+    return execute(request, new ResponseType<>(responseType), null).getParsedBody();
   }
 
   /**
@@ -80,7 +80,7 @@ public class RestClient {
    */
   public <T> T get(String path, JsonType<T> typeRef, Object... pathParams) {
     HttpRequest request = newRequest(resolvePath(path, pathParams)).GET().build();
-    return execute(request, new ResponseType<>(typeRef)).getParsedBody();
+    return execute(request, new ResponseType<>(typeRef), null).getParsedBody();
   }
 
   /**
@@ -108,9 +108,10 @@ public class RestClient {
    * @throws RestClientException if the response status is not 2xx
    */
   public <T> T post(String path, Object requestBody, Class<T> responseType, Object... pathParams) {
+    String bodyJson = toJson(requestBody);
     HttpRequest request =
-        newRequest(resolvePath(path, pathParams)).POST(toBodyPublisher(requestBody)).build();
-    return execute(request, new ResponseType<>(responseType)).getParsedBody();
+        newRequest(resolvePath(path, pathParams)).POST(toBodyPublisher(bodyJson)).build();
+    return execute(request, new ResponseType<>(responseType), bodyJson).getParsedBody();
   }
 
   /**
@@ -140,7 +141,8 @@ public class RestClient {
     HttpRequest.Builder builder = newRequest(resolvePath(path, pathParams));
     builder.setHeader("Content-Type", "multipart/form-data; boundary=" + boundary);
     HttpRequest request = builder.POST(toMultipartBodyPublisher(parts, boundary)).build();
-    return execute(request, new ResponseType<>(responseType)).getParsedBody();
+    String bodyForLog = "<multipart parts: " + String.join(", ", parts.keySet()) + ">";
+    return execute(request, new ResponseType<>(responseType), bodyForLog).getParsedBody();
   }
 
   /**
@@ -155,9 +157,10 @@ public class RestClient {
    * @throws RestClientException if the response status is not 2xx
    */
   public <T> T put(String path, Object requestBody, Class<T> responseType, Object... pathParams) {
+    String bodyJson = toJson(requestBody);
     HttpRequest request =
-        newRequest(resolvePath(path, pathParams)).PUT(toBodyPublisher(requestBody)).build();
-    return execute(request, new ResponseType<>(responseType)).getParsedBody();
+        newRequest(resolvePath(path, pathParams)).PUT(toBodyPublisher(bodyJson)).build();
+    return execute(request, new ResponseType<>(responseType), bodyJson).getParsedBody();
   }
 
   /**
@@ -173,11 +176,12 @@ public class RestClient {
    */
   public <T> T delete(
       String path, Object requestBody, Class<T> responseType, Object... pathParams) {
+    String bodyJson = toJson(requestBody);
     HttpRequest request =
         newRequest(resolvePath(path, pathParams))
-            .method("DELETE", toBodyPublisher(requestBody))
+            .method("DELETE", toBodyPublisher(bodyJson))
             .build();
-    return execute(request, new ResponseType<>(responseType)).getParsedBody();
+    return execute(request, new ResponseType<>(responseType), bodyJson).getParsedBody();
   }
 
   private HttpRequest.Builder newRequest(String url) {
@@ -193,11 +197,14 @@ public class RestClient {
     return builder;
   }
 
-  private BodyPublisher toBodyPublisher(Object body) {
-    if (body == null) {
-      return BodyPublishers.noBody();
-    }
-    return BodyPublishers.ofString(JsonUtils.obj2str(body), StandardCharsets.UTF_8);
+  private String toJson(Object body) {
+    return body == null ? null : JsonUtils.obj2str(body);
+  }
+
+  private BodyPublisher toBodyPublisher(String body) {
+    return body == null
+        ? BodyPublishers.noBody()
+        : BodyPublishers.ofString(body, StandardCharsets.UTF_8);
   }
 
   private BodyPublisher toMultipartBodyPublisher(Map<String, Object> parts, String boundary) {
@@ -245,28 +252,36 @@ public class RestClient {
     }
   }
 
-  private <T> ResponseWrapper<T> execute(HttpRequest request, ResponseType<T> responseType) {
-    ResponseWrapper<T> response = send(request, responseType);
+  private <T> ResponseWrapper<T> execute(
+      HttpRequest request, ResponseType<T> responseType, String requestBodyForLog) {
+    ResponseWrapper<T> response = send(request, responseType, requestBodyForLog);
     handleResponse(response);
     convertResponse(response);
     return response;
   }
 
   private byte[] executeAsBytes(HttpRequest request) {
-    ResponseWrapper<byte[]> response = send(request, new ResponseType<>(byte[].class));
+    ResponseWrapper<byte[]> response = send(request, new ResponseType<>(byte[].class), null);
     handleResponse(response);
     return response.getResponse().body();
   }
 
-  private <T> ResponseWrapper<T> send(HttpRequest request, ResponseType<T> responseType) {
+  private <T> ResponseWrapper<T> send(
+      HttpRequest request, ResponseType<T> responseType, String requestBodyForLog) {
     HttpResponse.BodyHandler<T> bodyHandler = bodyHandler(responseType.getType());
 
     try {
       log.debug("{} {}", request.method(), request.uri());
+      log.debug("Request headers: {}", request.headers().map());
+      if (requestBodyForLog != null) {
+        log.debug("Request body: {}", requestBodyForLog);
+      }
 
       HttpResponse<T> response = getHttpClientWithInit().send(request, bodyHandler);
 
       log.debug("Status: {}", response.statusCode());
+      log.debug("Response headers: {}", response.headers().map());
+      log.debug("Response body: {}", response.body());
 
       return new ResponseWrapper<>(responseType, response);
     } catch (IOException e) {

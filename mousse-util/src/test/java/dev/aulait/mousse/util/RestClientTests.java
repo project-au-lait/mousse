@@ -4,6 +4,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
@@ -19,6 +23,7 @@ import lombok.NoArgsConstructor;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 
 class RestClientTests {
 
@@ -240,6 +245,32 @@ class RestClientTests {
         assertThrows(RestClientException.class, () -> client.get("/api/server-error", Item.class));
     assertEquals(500, ex.getStatusCode());
     assertTrue(ex.getBody().contains("internal server error"));
+  }
+
+  @Test
+  void debugLogsRequestAndResponseHeadersAndBodyTest() {
+    Logger logger = (Logger) LoggerFactory.getLogger(RestClient.class);
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.setContext(logger.getLoggerContext());
+    appender.start();
+    logger.addAppender(appender);
+    logger.setLevel(Level.DEBUG);
+    try {
+      client.post("/api/items", Item.of("1", "Logged Item"), Item.class);
+
+      List<String> messages =
+          appender.list.stream().map(ILoggingEvent::getFormattedMessage).toList();
+      assertTrue(messages.stream().anyMatch(m -> m.contains("Request headers")));
+      assertTrue(
+          messages.stream().anyMatch(m -> m.contains("Request body") && m.contains("Logged Item")));
+      assertTrue(messages.stream().anyMatch(m -> m.contains("Response headers")));
+      assertTrue(
+          messages.stream()
+              .anyMatch(m -> m.contains("Response body") && m.contains("Logged Item")));
+    } finally {
+      logger.detachAppender(appender);
+      logger.setLevel(null);
+    }
   }
 
   private static void sendResponse(HttpExchange exchange, int statusCode, String body)
