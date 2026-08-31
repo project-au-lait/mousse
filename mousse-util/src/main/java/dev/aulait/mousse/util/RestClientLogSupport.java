@@ -20,4 +20,16 @@ final class RestClientLogSupport {
             sb.append(NL).append('\t').append(name).append(": ").append(String.join(", ", values)));
     return sb.toString();
   }
+
+  /**
+   * Formats a request/response body for display: JSON bodies are pretty-printed on their own
+   * lines (matching amv/RestAssured's log style); non-JSON bodies are kept as-is on the same line.
+   */
+  static String formatBody(String body) {
+    if (body == null) {
+      return " <none>";
+    }
+    String prettyJson = JsonUtils.tryPrettyPrint(body);
+    return prettyJson != null ? NL + prettyJson : " " + body;
+  }
 }

@@ -290,6 +290,35 @@ class RestClientTests {
           messages.stream().anyMatch(m -> m.contains("Response:") && m.contains("Headers:")));
       assertTrue(
           messages.stream().anyMatch(m -> m.contains("Response:") && m.contains("Logged Item")));
+      // body is pretty-printed JSON (indented, multi-line), not the compact single-line form
+      assertTrue(
+          messages.stream()
+              .anyMatch(m -> m.contains("\"name\" : \"Logged Item\"") && m.contains("\n")));
+    } finally {
+      logger.detachAppender(appender);
+      logger.setLevel(null);
+    }
+  }
+
+  @Test
+  void filtersLogBinaryResponseWithoutPrettyPrintTest() {
+    Logger logger = (Logger) LoggerFactory.getLogger(RestClient.class);
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.setContext(logger.getLoggerContext());
+    appender.start();
+    logger.addAppender(appender);
+    logger.setLevel(Level.DEBUG);
+    try {
+      RestClient loggingClient =
+          RestClient.builder()
+              .baseUrl(client.getBaseUrl())
+              .filters(new RequestLoggingFilter(), new ResponseLoggingFilter())
+              .build();
+      loggingClient.getAsByte("/api/binary");
+
+      List<String> messages =
+          appender.list.stream().map(ILoggingEvent::getFormattedMessage).toList();
+      assertTrue(messages.stream().anyMatch(m -> m.contains("Response:") && m.contains("[1, 2, 3, 4]")));
     } finally {
       logger.detachAppender(appender);
       logger.setLevel(null);

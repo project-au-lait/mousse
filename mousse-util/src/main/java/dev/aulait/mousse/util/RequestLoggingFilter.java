@@ -26,7 +26,7 @@ public class RequestLoggingFilter implements RestClientFilter {
             + "Headers: "
             + RestClientLogSupport.formatHeaders(request.headers().map())
             + RestClientLogSupport.NL
-            + "Body: "
-            + (requestBodyForLog == null ? "<none>" : requestBodyForLog));
+            + "Body:"
+            + RestClientLogSupport.formatBody(requestBodyForLog));
   }
 }

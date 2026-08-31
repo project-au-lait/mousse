@@ -17,14 +17,20 @@ public class ResponseLoggingFilter implements RestClientFilter {
     if (!log.isDebugEnabled()) {
       return;
     }
-    log.debug(
+    String prefix =
         "Response: "
             + response.statusCode()
             + RestClientLogSupport.NL
             + "Headers: "
             + RestClientLogSupport.formatHeaders(response.headers().map())
             + RestClientLogSupport.NL
-            + "Body: {}",
-        response.body());
+            + "Body:";
+    Object body = response.body();
+    if (body instanceof String stringBody) {
+      // pretty-print JSON bodies; keep SLF4J's {} placeholder for non-String bodies (e.g. byte[])
+      log.debug(prefix + RestClientLogSupport.formatBody(stringBody));
+    } else {
+      log.debug(prefix + " {}", body);
+    }
   }
 }
