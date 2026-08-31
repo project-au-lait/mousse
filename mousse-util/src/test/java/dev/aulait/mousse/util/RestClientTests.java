@@ -248,7 +248,7 @@ class RestClientTests {
   }
 
   @Test
-  void debugLogsRequestAndResponseHeadersAndBodyTest() {
+  void noFiltersMeansNoLoggingTest() {
     Logger logger = (Logger) LoggerFactory.getLogger(RestClient.class);
     ListAppender<ILoggingEvent> appender = new ListAppender<>();
     appender.setContext(logger.getLoggerContext());
@@ -256,17 +256,40 @@ class RestClientTests {
     logger.addAppender(appender);
     logger.setLevel(Level.DEBUG);
     try {
-      client.post("/api/items", Item.of("1", "Logged Item"), Item.class);
+      client.post("/api/items", Item.of("1", "No Filter Item"), Item.class);
+
+      assertTrue(appender.list.isEmpty());
+    } finally {
+      logger.detachAppender(appender);
+      logger.setLevel(null);
+    }
+  }
+
+  @Test
+  void filtersLogRequestAndResponseHeadersAndBodyTest() {
+    Logger logger = (Logger) LoggerFactory.getLogger(RestClient.class);
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.setContext(logger.getLoggerContext());
+    appender.start();
+    logger.addAppender(appender);
+    logger.setLevel(Level.DEBUG);
+    try {
+      RestClient loggingClient =
+          RestClient.builder()
+              .baseUrl(client.getBaseUrl())
+              .filters(new RequestLoggingFilter(), new ResponseLoggingFilter())
+              .build();
+      loggingClient.post("/api/items", Item.of("1", "Logged Item"), Item.class);
 
       List<String> messages =
           appender.list.stream().map(ILoggingEvent::getFormattedMessage).toList();
-      assertTrue(messages.stream().anyMatch(m -> m.contains("Request headers")));
+      assertTrue(messages.stream().anyMatch(m -> m.contains("Request:") && m.contains("Headers:")));
       assertTrue(
-          messages.stream().anyMatch(m -> m.contains("Request body") && m.contains("Logged Item")));
-      assertTrue(messages.stream().anyMatch(m -> m.contains("Response headers")));
+          messages.stream().anyMatch(m -> m.contains("Request:") && m.contains("Logged Item")));
       assertTrue(
-          messages.stream()
-              .anyMatch(m -> m.contains("Response body") && m.contains("Logged Item")));
+          messages.stream().anyMatch(m -> m.contains("Response:") && m.contains("Headers:")));
+      assertTrue(
+          messages.stream().anyMatch(m -> m.contains("Response:") && m.contains("Logged Item")));
     } finally {
       logger.detachAppender(appender);
       logger.setLevel(null);

@@ -13,6 +13,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
@@ -23,7 +24,6 @@ import lombok.Data;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.Singular;
-import lombok.extern.slf4j.Slf4j;
 import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.ConfigProvider;
 
@@ -34,7 +34,6 @@ import org.eclipse.microprofile.config.ConfigProvider;
  * serialization/deserialization.
  */
 @Builder
-@Slf4j
 public class RestClient {
 
   private static final String CONTENT_DISPOSITION_PREFIX =
@@ -45,6 +44,13 @@ public class RestClient {
   @Getter @Singular private Map<String, String> headers;
   @Getter @Singular private Map<String, Supplier<String>> headerSuppliers;
   @Getter private HttpClient httpClient;
+
+  /**
+   * Filters that intercept requests and responses, similar to RestAssured's {@code Filter}.
+   * Without any filters attached, requests are sent without any logging, just like RestAssured
+   * without {@code .filters(...)}. Never {@code null}; defaults to an empty list.
+   */
+  @Getter private List<RestClientFilter> filters;
 
   /**
    * If true, non-2xx response statuses will not throw an exception. The response body can be
@@ -271,17 +277,15 @@ public class RestClient {
     HttpResponse.BodyHandler<T> bodyHandler = bodyHandler(responseType.getType());
 
     try {
-      log.debug("{} {}", request.method(), request.uri());
-      log.debug("Request headers: {}", request.headers().map());
-      if (requestBodyForLog != null) {
-        log.debug("Request body: {}", requestBodyForLog);
+      for (RestClientFilter filter : filters) {
+        filter.logRequest(request, requestBodyForLog);
       }
 
       HttpResponse<T> response = getHttpClientWithInit().send(request, bodyHandler);
 
-      log.debug("Status: {}", response.statusCode());
-      log.debug("Response headers: {}", response.headers().map());
-      log.debug("Response body: {}", response.body());
+      for (RestClientFilter filter : filters) {
+        filter.logResponse(response);
+      }
 
       return new ResponseWrapper<>(responseType, response);
     } catch (IOException e) {
@@ -382,6 +386,7 @@ public class RestClient {
 
   public static class RestClientBuilder {
     private boolean defaultHeaders = true;
+    private List<RestClientFilter> filters = List.of();
 
     public RestClientBuilder() {
       if (defaultHeaders) {
@@ -399,6 +404,18 @@ public class RestClient {
      */
     public RestClientBuilder defaultHeaders(boolean defaultHeaders) {
       this.defaultHeaders = defaultHeaders;
+      return this;
+    }
+
+    /**
+     * Attaches filters that intercept requests and responses, similar to RestAssured's {@code
+     * .filters(new RequestLoggingFilter(), new ResponseLoggingFilter())}.
+     *
+     * @param filters the filters to attach, applied in the given order
+     * @return this builder instance for chaining
+     */
+    public RestClientBuilder filters(RestClientFilter... filters) {
+      this.filters = List.of(filters);
       return this;
     }
 
