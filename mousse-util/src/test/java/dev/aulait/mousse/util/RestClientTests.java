@@ -325,6 +325,35 @@ class RestClientTests {
     }
   }
 
+  @Test
+  void filtersWithPrettyPrintDisabledLogCompactBodyTest() {
+    Logger logger = (Logger) LoggerFactory.getLogger(RestClient.class);
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.setContext(logger.getLoggerContext());
+    appender.start();
+    logger.addAppender(appender);
+    logger.setLevel(Level.DEBUG);
+    try {
+      RestClient loggingClient =
+          RestClient.builder()
+              .baseUrl(client.getBaseUrl())
+              .filters(new RequestLoggingFilter(false), new ResponseLoggingFilter(false))
+              .build();
+      loggingClient.post("/api/items", Item.of("1", "Compact Item"), Item.class);
+
+      List<String> messages =
+          appender.list.stream().map(ILoggingEvent::getFormattedMessage).toList();
+      // compact JSON has no space around ':' (e.g. "id":"1"), pretty-print always adds one
+      assertTrue(messages.stream().anyMatch(m -> m.contains("Request:") && m.contains("\"id\":\"1\"")));
+      assertTrue(
+          messages.stream().anyMatch(m -> m.contains("Response:") && m.contains("\"id\":\"1\"")));
+      assertTrue(messages.stream().noneMatch(m -> m.contains("\"id\" : \"1\"")));
+    } finally {
+      logger.detachAppender(appender);
+      logger.setLevel(null);
+    }
+  }
+
   private static void sendResponse(HttpExchange exchange, int statusCode, String body)
       throws IOException {
     byte[] bytes = body.getBytes(StandardCharsets.UTF_8);

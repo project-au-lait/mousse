@@ -114,10 +114,9 @@ public class RestClient {
    * @throws RestClientException if the response status is not 2xx
    */
   public <T> T post(String path, Object requestBody, Class<T> responseType, Object... pathParams) {
-    String bodyJson = toJson(requestBody);
     HttpRequest request =
-        newRequest(resolvePath(path, pathParams)).POST(toBodyPublisher(bodyJson)).build();
-    return execute(request, new ResponseType<>(responseType), bodyJson).getParsedBody();
+        newRequest(resolvePath(path, pathParams)).POST(toBodyPublisher(toJson(requestBody))).build();
+    return execute(request, new ResponseType<>(responseType), requestBody).getParsedBody();
   }
 
   /**
@@ -163,10 +162,9 @@ public class RestClient {
    * @throws RestClientException if the response status is not 2xx
    */
   public <T> T put(String path, Object requestBody, Class<T> responseType, Object... pathParams) {
-    String bodyJson = toJson(requestBody);
     HttpRequest request =
-        newRequest(resolvePath(path, pathParams)).PUT(toBodyPublisher(bodyJson)).build();
-    return execute(request, new ResponseType<>(responseType), bodyJson).getParsedBody();
+        newRequest(resolvePath(path, pathParams)).PUT(toBodyPublisher(toJson(requestBody))).build();
+    return execute(request, new ResponseType<>(responseType), requestBody).getParsedBody();
   }
 
   /**
@@ -182,12 +180,11 @@ public class RestClient {
    */
   public <T> T delete(
       String path, Object requestBody, Class<T> responseType, Object... pathParams) {
-    String bodyJson = toJson(requestBody);
     HttpRequest request =
         newRequest(resolvePath(path, pathParams))
-            .method("DELETE", toBodyPublisher(bodyJson))
+            .method("DELETE", toBodyPublisher(toJson(requestBody)))
             .build();
-    return execute(request, new ResponseType<>(responseType), bodyJson).getParsedBody();
+    return execute(request, new ResponseType<>(responseType), requestBody).getParsedBody();
   }
 
   private HttpRequest.Builder newRequest(String url) {
@@ -259,7 +256,7 @@ public class RestClient {
   }
 
   private <T> ResponseWrapper<T> execute(
-      HttpRequest request, ResponseType<T> responseType, String requestBodyForLog) {
+      HttpRequest request, ResponseType<T> responseType, Object requestBodyForLog) {
     ResponseWrapper<T> response = send(request, responseType, requestBodyForLog);
     handleResponse(response);
     convertResponse(response);
@@ -273,7 +270,7 @@ public class RestClient {
   }
 
   private <T> ResponseWrapper<T> send(
-      HttpRequest request, ResponseType<T> responseType, String requestBodyForLog) {
+      HttpRequest request, ResponseType<T> responseType, Object requestBodyForLog) {
     HttpResponse.BodyHandler<T> bodyHandler = bodyHandler(responseType.getType());
 
     try {

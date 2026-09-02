@@ -67,21 +67,6 @@ public class JsonUtils {
   }
 
   /**
-   * Reformats a JSON string into a pretty-printed representation, for display purposes such as
-   * logging.
-   *
-   * @param json the JSON string to reformat
-   * @return the pretty-printed JSON, or {@code null} if {@code json} is not valid JSON
-   */
-  public static String tryPrettyPrint(String json) {
-    try {
-      return MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(MAPPER.readTree(json));
-    } catch (JsonProcessingException e) {
-      return null;
-    }
-  }
-
-  /**
    * Reads a JSON file and converts its content to an object of the specified class.
    *
    * @param <T> the type of the object to be returned

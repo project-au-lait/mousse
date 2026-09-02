@@ -17,9 +17,10 @@ public interface RestClientFilter {
    * Called with a request before it is sent.
    *
    * @param request the request to be sent
-   * @param requestBodyForLog the request body to log, or {@code null} if there is no body
+   * @param requestBody the original request body object to log, or {@code null} if there is no
+   *     body
    */
-  default void logRequest(HttpRequest request, String requestBodyForLog) {}
+  default void logRequest(HttpRequest request, Object requestBody) {}
 
   /**
    * Called with a response after it is received.

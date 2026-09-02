@@ -1,5 +1,6 @@
 package dev.aulait.mousse.util;
 
+import java.io.UncheckedIOException;
 import java.util.List;
 import java.util.Map;
 
@@ -22,14 +23,34 @@ final class RestClientLogSupport {
   }
 
   /**
-   * Formats a request/response body for display: JSON bodies are pretty-printed on their own
-   * lines (matching amv/RestAssured's log style); non-JSON bodies are kept as-is on the same line.
+   * Formats a request body for display using the original (pre-serialization) object: {@code
+   * null} becomes {@code "<none>"}; a {@code String} (e.g. the multipart part summary) is used
+   * as-is; any other object is serialized via {@link JsonUtils}, pretty-printed on its own line
+   * when {@code prettyPrint} is true, or compact on the same line otherwise.
    */
-  static String formatBody(String body) {
+  static String formatRequestBody(Object body, boolean prettyPrint) {
     if (body == null) {
       return " <none>";
     }
-    String prettyJson = JsonUtils.tryPrettyPrint(body);
-    return prettyJson != null ? NL + prettyJson : " " + body;
+    if (body instanceof String text) {
+      return " " + text;
+    }
+    return prettyPrint ? NL + JsonUtils.obj2fmtstr(body) : " " + JsonUtils.obj2str(body);
+  }
+
+  /**
+   * Formats a response body string for display: pretty-printed on its own line when {@code
+   * prettyPrint} is true and the body is valid JSON; otherwise returned as-is on the same line.
+   */
+  static String formatResponseBody(String body, boolean prettyPrint) {
+    if (!prettyPrint) {
+      return " " + body;
+    }
+    try {
+      return NL + JsonUtils.obj2fmtstr(JsonUtils.str2obj(body, Object.class));
+    } catch (UncheckedIOException e) {
+      // not valid JSON (e.g. plain text or an HTML error page); fall back to the raw body
+      return " " + body;
+    }
   }
 }
