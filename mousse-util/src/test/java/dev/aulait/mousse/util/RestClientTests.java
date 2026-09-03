@@ -249,30 +249,19 @@ class RestClientTests {
 
   @Test
   void noFiltersMeansNoLoggingTest() {
-    Logger logger = (Logger) LoggerFactory.getLogger(RestClient.class);
-    ListAppender<ILoggingEvent> appender = new ListAppender<>();
-    appender.setContext(logger.getLoggerContext());
-    appender.start();
-    logger.addAppender(appender);
-    logger.setLevel(Level.DEBUG);
+    ListAppender<ILoggingEvent> appender = attachAppender(Level.DEBUG);
     try {
       client.post("/api/items", Item.of("1", "No Filter Item"), Item.class);
 
       assertTrue(appender.list.isEmpty());
     } finally {
-      logger.detachAppender(appender);
-      logger.setLevel(null);
+      detachAppender(appender);
     }
   }
 
   @Test
   void filtersLogRequestAndResponseHeadersAndBodyTest() {
-    Logger logger = (Logger) LoggerFactory.getLogger(RestClient.class);
-    ListAppender<ILoggingEvent> appender = new ListAppender<>();
-    appender.setContext(logger.getLoggerContext());
-    appender.start();
-    logger.addAppender(appender);
-    logger.setLevel(Level.DEBUG);
+    ListAppender<ILoggingEvent> appender = attachAppender(Level.DEBUG);
     try {
       RestClient loggingClient =
           RestClient.builder()
@@ -281,8 +270,7 @@ class RestClientTests {
               .build();
       loggingClient.post("/api/items", Item.of("1", "Logged Item"), Item.class);
 
-      List<String> messages =
-          appender.list.stream().map(ILoggingEvent::getFormattedMessage).toList();
+      List<String> messages = formattedMessages(appender);
       assertTrue(messages.stream().anyMatch(m -> m.contains("Request:") && m.contains("Headers:")));
       assertTrue(
           messages.stream().anyMatch(m -> m.contains("Request:") && m.contains("Logged Item")));
@@ -295,19 +283,13 @@ class RestClientTests {
           messages.stream()
               .anyMatch(m -> m.contains("\"name\" : \"Logged Item\"") && m.contains("\n")));
     } finally {
-      logger.detachAppender(appender);
-      logger.setLevel(null);
+      detachAppender(appender);
     }
   }
 
   @Test
   void filtersLogBinaryResponseWithoutPrettyPrintTest() {
-    Logger logger = (Logger) LoggerFactory.getLogger(RestClient.class);
-    ListAppender<ILoggingEvent> appender = new ListAppender<>();
-    appender.setContext(logger.getLoggerContext());
-    appender.start();
-    logger.addAppender(appender);
-    logger.setLevel(Level.DEBUG);
+    ListAppender<ILoggingEvent> appender = attachAppender(Level.DEBUG);
     try {
       RestClient loggingClient =
           RestClient.builder()
@@ -316,23 +298,16 @@ class RestClientTests {
               .build();
       loggingClient.getAsByte("/api/binary");
 
-      List<String> messages =
-          appender.list.stream().map(ILoggingEvent::getFormattedMessage).toList();
+      List<String> messages = formattedMessages(appender);
       assertTrue(messages.stream().anyMatch(m -> m.contains("Response:") && m.contains("[1, 2, 3, 4]")));
     } finally {
-      logger.detachAppender(appender);
-      logger.setLevel(null);
+      detachAppender(appender);
     }
   }
 
   @Test
   void filtersWithPrettyPrintDisabledLogCompactBodyTest() {
-    Logger logger = (Logger) LoggerFactory.getLogger(RestClient.class);
-    ListAppender<ILoggingEvent> appender = new ListAppender<>();
-    appender.setContext(logger.getLoggerContext());
-    appender.start();
-    logger.addAppender(appender);
-    logger.setLevel(Level.DEBUG);
+    ListAppender<ILoggingEvent> appender = attachAppender(Level.DEBUG);
     try {
       RestClient loggingClient =
           RestClient.builder()
@@ -341,17 +316,60 @@ class RestClientTests {
               .build();
       loggingClient.post("/api/items", Item.of("1", "Compact Item"), Item.class);
 
-      List<String> messages =
-          appender.list.stream().map(ILoggingEvent::getFormattedMessage).toList();
+      List<String> messages = formattedMessages(appender);
       // compact JSON has no space around ':' (e.g. "id":"1"), pretty-print always adds one
       assertTrue(messages.stream().anyMatch(m -> m.contains("Request:") && m.contains("\"id\":\"1\"")));
       assertTrue(
           messages.stream().anyMatch(m -> m.contains("Response:") && m.contains("\"id\":\"1\"")));
       assertTrue(messages.stream().noneMatch(m -> m.contains("\"id\" : \"1\"")));
     } finally {
-      logger.detachAppender(appender);
-      logger.setLevel(null);
+      detachAppender(appender);
     }
+  }
+
+  @Test
+  void filtersLogMultipartRequestAsSummaryTest() {
+    ListAppender<ILoggingEvent> appender = attachAppender(Level.DEBUG);
+    try {
+      RestClient loggingClient =
+          RestClient.builder()
+              .baseUrl(client.getBaseUrl())
+              .filters(new RequestLoggingFilter(), new ResponseLoggingFilter())
+              .build();
+      java.util.Map<String, Object> parts = new java.util.LinkedHashMap<>();
+      parts.put("field1", "value1");
+      parts.put("file1", new byte[] {0x01, 0x02});
+      loggingClient.postMultipart("/api/multipart", parts, String.class);
+
+      List<String> messages = formattedMessages(appender);
+      // the summary must appear as-is, not JSON-escaped in quotes (e.g. "<multipart parts: ...>")
+      assertTrue(
+          messages.stream()
+              .anyMatch(
+                  m -> m.contains("Request:") && m.contains("Body: <multipart parts: field1, file1>")));
+    } finally {
+      detachAppender(appender);
+    }
+  }
+
+  private static ListAppender<ILoggingEvent> attachAppender(Level level) {
+    Logger logger = (Logger) LoggerFactory.getLogger(RestClient.class);
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.setContext(logger.getLoggerContext());
+    appender.start();
+    logger.addAppender(appender);
+    logger.setLevel(level);
+    return appender;
+  }
+
+  private static void detachAppender(ListAppender<ILoggingEvent> appender) {
+    Logger logger = (Logger) LoggerFactory.getLogger(RestClient.class);
+    logger.detachAppender(appender);
+    logger.setLevel(null);
+  }
+
+  private static List<String> formattedMessages(ListAppender<ILoggingEvent> appender) {
+    return appender.list.stream().map(ILoggingEvent::getFormattedMessage).toList();
   }
 
   private static void sendResponse(HttpExchange exchange, int statusCode, String body)
