@@ -5,6 +5,7 @@
   <modelVersion>4.0.0</modelVersion>
   <!-- The Basics -->
   <artifactId>mousse-util</artifactId>
+  <name>Mousse Util</name>
 
   <dependencies>
     <dependency>
