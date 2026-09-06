@@ -13,14 +13,13 @@ Mousse is a lightweight Java utility library that provides the following feature
 
 ## Usage
 
-Mousse is available on the [GitHub Packages](https://github.com/orgs/project-au-lait/packages?repo_name=mousse).
 To use Mousse, add the following dependency to your `pom.xml`:
 
 ```xml
 <dependency>
   <groupId>dev.aulait.mousse</groupId>
   <artifactId>mousse-util</artifactId>
-  <version>0.8-SNAPSHOT</version>
+  <version>0.8</version>
 </dependency>
 ```
 
