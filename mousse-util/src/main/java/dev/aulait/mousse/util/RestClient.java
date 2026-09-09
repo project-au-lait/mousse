@@ -13,6 +13,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
@@ -23,7 +24,6 @@ import lombok.Data;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.Singular;
-import lombok.extern.slf4j.Slf4j;
 import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.ConfigProvider;
 
@@ -34,7 +34,6 @@ import org.eclipse.microprofile.config.ConfigProvider;
  * serialization/deserialization.
  */
 @Builder
-@Slf4j
 public class RestClient {
 
   private static final String CONTENT_DISPOSITION_PREFIX =
@@ -45,6 +44,13 @@ public class RestClient {
   @Getter @Singular private Map<String, String> headers;
   @Getter @Singular private Map<String, Supplier<String>> headerSuppliers;
   @Getter private HttpClient httpClient;
+
+  /**
+   * Filters that intercept requests and responses, similar to RestAssured's {@code Filter}.
+   * Without any filters attached, requests are sent without any logging, just like RestAssured
+   * without {@code .filters(...)}. Never {@code null}; defaults to an empty list.
+   */
+  @Getter private List<RestClientFilter> filters;
 
   /**
    * If true, non-2xx response statuses will not throw an exception. The response body can be
@@ -65,7 +71,7 @@ public class RestClient {
    */
   public <T> T get(String path, Class<T> responseType, Object... pathParams) {
     HttpRequest request = newRequest(resolvePath(path, pathParams)).GET().build();
-    return execute(request, new ResponseType<>(responseType)).getParsedBody();
+    return execute(request, new ResponseType<>(responseType), null).getParsedBody();
   }
 
   /**
@@ -80,7 +86,7 @@ public class RestClient {
    */
   public <T> T get(String path, JsonType<T> typeRef, Object... pathParams) {
     HttpRequest request = newRequest(resolvePath(path, pathParams)).GET().build();
-    return execute(request, new ResponseType<>(typeRef)).getParsedBody();
+    return execute(request, new ResponseType<>(typeRef), null).getParsedBody();
   }
 
   /**
@@ -109,8 +115,8 @@ public class RestClient {
    */
   public <T> T post(String path, Object requestBody, Class<T> responseType, Object... pathParams) {
     HttpRequest request =
-        newRequest(resolvePath(path, pathParams)).POST(toBodyPublisher(requestBody)).build();
-    return execute(request, new ResponseType<>(responseType)).getParsedBody();
+        newRequest(resolvePath(path, pathParams)).POST(toBodyPublisher(toJson(requestBody))).build();
+    return execute(request, new ResponseType<>(responseType), requestBody).getParsedBody();
   }
 
   /**
@@ -140,7 +146,8 @@ public class RestClient {
     HttpRequest.Builder builder = newRequest(resolvePath(path, pathParams));
     builder.setHeader("Content-Type", "multipart/form-data; boundary=" + boundary);
     HttpRequest request = builder.POST(toMultipartBodyPublisher(parts, boundary)).build();
-    return execute(request, new ResponseType<>(responseType)).getParsedBody();
+    String bodyForLog = "<multipart parts: " + String.join(", ", parts.keySet()) + ">";
+    return execute(request, new ResponseType<>(responseType), bodyForLog).getParsedBody();
   }
 
   /**
@@ -156,8 +163,8 @@ public class RestClient {
    */
   public <T> T put(String path, Object requestBody, Class<T> responseType, Object... pathParams) {
     HttpRequest request =
-        newRequest(resolvePath(path, pathParams)).PUT(toBodyPublisher(requestBody)).build();
-    return execute(request, new ResponseType<>(responseType)).getParsedBody();
+        newRequest(resolvePath(path, pathParams)).PUT(toBodyPublisher(toJson(requestBody))).build();
+    return execute(request, new ResponseType<>(responseType), requestBody).getParsedBody();
   }
 
   /**
@@ -175,9 +182,9 @@ public class RestClient {
       String path, Object requestBody, Class<T> responseType, Object... pathParams) {
     HttpRequest request =
         newRequest(resolvePath(path, pathParams))
-            .method("DELETE", toBodyPublisher(requestBody))
+            .method("DELETE", toBodyPublisher(toJson(requestBody)))
             .build();
-    return execute(request, new ResponseType<>(responseType)).getParsedBody();
+    return execute(request, new ResponseType<>(responseType), requestBody).getParsedBody();
   }
 
   private HttpRequest.Builder newRequest(String url) {
@@ -193,11 +200,14 @@ public class RestClient {
     return builder;
   }
 
-  private BodyPublisher toBodyPublisher(Object body) {
-    if (body == null) {
-      return BodyPublishers.noBody();
-    }
-    return BodyPublishers.ofString(JsonUtils.obj2str(body), StandardCharsets.UTF_8);
+  private String toJson(Object body) {
+    return body == null ? null : JsonUtils.obj2str(body);
+  }
+
+  private BodyPublisher toBodyPublisher(String body) {
+    return body == null
+        ? BodyPublishers.noBody()
+        : BodyPublishers.ofString(body, StandardCharsets.UTF_8);
   }
 
   private BodyPublisher toMultipartBodyPublisher(Map<String, Object> parts, String boundary) {
@@ -245,28 +255,34 @@ public class RestClient {
     }
   }
 
-  private <T> ResponseWrapper<T> execute(HttpRequest request, ResponseType<T> responseType) {
-    ResponseWrapper<T> response = send(request, responseType);
+  private <T> ResponseWrapper<T> execute(
+      HttpRequest request, ResponseType<T> responseType, Object requestBodyForLog) {
+    ResponseWrapper<T> response = send(request, responseType, requestBodyForLog);
     handleResponse(response);
     convertResponse(response);
     return response;
   }
 
   private byte[] executeAsBytes(HttpRequest request) {
-    ResponseWrapper<byte[]> response = send(request, new ResponseType<>(byte[].class));
+    ResponseWrapper<byte[]> response = send(request, new ResponseType<>(byte[].class), null);
     handleResponse(response);
     return response.getResponse().body();
   }
 
-  private <T> ResponseWrapper<T> send(HttpRequest request, ResponseType<T> responseType) {
+  private <T> ResponseWrapper<T> send(
+      HttpRequest request, ResponseType<T> responseType, Object requestBodyForLog) {
     HttpResponse.BodyHandler<T> bodyHandler = bodyHandler(responseType.getType());
 
     try {
-      log.debug("{} {}", request.method(), request.uri());
+      for (RestClientFilter filter : filters) {
+        filter.logRequest(request, requestBodyForLog);
+      }
 
       HttpResponse<T> response = getHttpClientWithInit().send(request, bodyHandler);
 
-      log.debug("Status: {}", response.statusCode());
+      for (RestClientFilter filter : filters) {
+        filter.logResponse(response);
+      }
 
       return new ResponseWrapper<>(responseType, response);
     } catch (IOException e) {
@@ -367,6 +383,7 @@ public class RestClient {
 
   public static class RestClientBuilder {
     private boolean defaultHeaders = true;
+    private List<RestClientFilter> filters = List.of();
 
     public RestClientBuilder() {
       if (defaultHeaders) {
@@ -384,6 +401,18 @@ public class RestClient {
      */
     public RestClientBuilder defaultHeaders(boolean defaultHeaders) {
       this.defaultHeaders = defaultHeaders;
+      return this;
+    }
+
+    /**
+     * Attaches filters that intercept requests and responses, similar to RestAssured's {@code
+     * .filters(new RequestLoggingFilter(), new ResponseLoggingFilter())}.
+     *
+     * @param filters the filters to attach, applied in the given order
+     * @return this builder instance for chaining
+     */
+    public RestClientBuilder filters(RestClientFilter... filters) {
+      this.filters = List.of(filters);
       return this;
     }
 
