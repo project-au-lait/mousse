@@ -211,11 +211,11 @@ class RestClientTests {
 
     loggingClient.post("/api/items", Item.of("1", "Logged Item"), Item.class);
 
-    String log = output.toString(StandardCharsets.UTF_8);
-    assertTrue(log.contains("Request method: POST"));
-    assertTrue(log.contains("Request body: {\"id\":\"1\",\"name\":\"Logged Item\"}"));
-    assertTrue(log.contains("Response status: 200"));
-    assertTrue(log.contains("Response body: {\"id\":\"1\",\"name\":\"Logged Item\"}"));
+    List<String> logLines = output.toString(StandardCharsets.UTF_8).lines().toList();
+    assertEquals("Request method: POST", logLines.get(0));
+    assertEquals("Request body: {\"id\":\"1\",\"name\":\"Logged Item\"}", logLines.get(2));
+    assertEquals("Response status: 200", logLines.get(3));
+    assertEquals("Response body: {\"id\":\"1\",\"name\":\"Logged Item\"}", logLines.get(4));
   }
 
   @Test
