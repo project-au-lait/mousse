@@ -6,8 +6,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.io.PrintStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -195,6 +197,25 @@ class RestClientTests {
     Item result = client.post("/api/items", item, Item.class);
     assertEquals("1", result.getId());
     assertEquals("New Item", result.getName());
+  }
+
+  @Test
+  void loggingFilterLogsRequestAndResponseBodiesTest() {
+    ByteArrayOutputStream output = new ByteArrayOutputStream();
+    RestClient loggingClient =
+        RestClient.builder()
+            .baseUrl("http://localhost:" + server.getAddress().getPort())
+            .filter(
+                new RestClientLoggingFilter(new PrintStream(output, true, StandardCharsets.UTF_8)))
+            .build();
+
+    loggingClient.post("/api/items", Item.of("1", "Logged Item"), Item.class);
+
+    String log = output.toString(StandardCharsets.UTF_8);
+    assertTrue(log.contains("Request method: POST"));
+    assertTrue(log.contains("Request body: {\"id\":\"1\",\"name\":\"Logged Item\"}"));
+    assertTrue(log.contains("Response status: 200"));
+    assertTrue(log.contains("Response body: {\"id\":\"1\",\"name\":\"Logged Item\"}"));
   }
 
   @Test
