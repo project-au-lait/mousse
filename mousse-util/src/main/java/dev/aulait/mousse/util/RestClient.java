@@ -272,7 +272,8 @@ public class RestClient {
             .map(RepeatableBodyPublisher::body)
             .orElseGet(() -> new byte[0]);
     HttpResponse<T> response =
-        new FilterContextImpl().next(new RestClientRequest(request, body), bodyHandler);
+        new FilterContextImpl(filters, this::getHttpClientWithInit)
+            .next(new RestClientRequest(request, body), bodyHandler);
     return new ResponseWrapper<>(responseType, response);
   }
 
@@ -282,35 +283,6 @@ public class RestClient {
           HttpClient.newBuilder().connectTimeout(Duration.ofMillis(connectTimeoutMillis)).build();
     }
     return httpClient;
-  }
-
-  private class FilterContextImpl implements RestClientFilter.FilterContext {
-
-    private int index;
-
-    @Override
-    public <T> HttpResponse<T> next(
-        RestClientRequest request, HttpResponse.BodyHandler<T> bodyHandler) {
-      if (index < filters.size()) {
-        return filters.get(index++).filter(request, bodyHandler, this);
-      }
-      return sendRequest(request, bodyHandler);
-    }
-
-    private <T> HttpResponse<T> sendRequest(
-        RestClientRequest request, HttpResponse.BodyHandler<T> bodyHandler) {
-      try {
-        log.debug("{} {}", request.method(), request.uri());
-        HttpResponse<T> response = getHttpClientWithInit().send(request.request(), bodyHandler);
-        log.debug("Status: {}", response.statusCode());
-        return response;
-      } catch (IOException e) {
-        throw new RestClientException(e);
-      } catch (InterruptedException e) {
-        Thread.currentThread().interrupt();
-        throw new RestClientException(e);
-      }
-    }
   }
 
   private static class RepeatableBodyPublisher implements BodyPublisher {
