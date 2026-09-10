@@ -5,9 +5,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpResponse;
 import java.util.List;
 import java.util.function.Supplier;
-import lombok.extern.slf4j.Slf4j;
 
-@Slf4j
 class FilterContextImpl implements FilterContext {
 
   private final List<RestClientFilter> filters;
@@ -31,10 +29,7 @@ class FilterContextImpl implements FilterContext {
   private <T> HttpResponse<T> sendRequest(
       RestClientRequest request, HttpResponse.BodyHandler<T> bodyHandler) {
     try {
-      log.debug("{} {}", request.method(), request.uri());
-      HttpResponse<T> response = httpClientSupplier.get().send(request.request(), bodyHandler);
-      log.debug("Status: {}", response.statusCode());
-      return response;
+      return httpClientSupplier.get().send(request.request(), bodyHandler);
     } catch (IOException e) {
       throw new RestClientException(e);
     } catch (InterruptedException e) {
