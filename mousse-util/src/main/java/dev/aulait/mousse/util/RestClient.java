@@ -9,14 +9,17 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpRequest.BodyPublisher;
 import java.net.http.HttpRequest.BodyPublishers;
 import java.net.http.HttpResponse;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.Flow;
 import java.util.function.Supplier;
 import lombok.Builder;
 import lombok.Data;
@@ -44,6 +47,7 @@ public class RestClient {
   @Getter @Builder.Default private long connectTimeoutMillis = 5000L;
   @Getter @Singular private Map<String, String> headers;
   @Getter @Singular private Map<String, Supplier<String>> headerSuppliers;
+  @Getter @Singular private List<RestClientFilter> filters;
   @Getter private HttpClient httpClient;
 
   /**
@@ -195,9 +199,9 @@ public class RestClient {
 
   private BodyPublisher toBodyPublisher(Object body) {
     if (body == null) {
-      return BodyPublishers.noBody();
+      return new RepeatableBodyPublisher(new byte[0]);
     }
-    return BodyPublishers.ofString(JsonUtils.obj2str(body), StandardCharsets.UTF_8);
+    return new RepeatableBodyPublisher(JsonUtils.obj2str(body).getBytes(StandardCharsets.UTF_8));
   }
 
   private BodyPublisher toMultipartBodyPublisher(Map<String, Object> parts, String boundary) {
@@ -239,7 +243,7 @@ public class RestClient {
         baos.write("\r\n".getBytes(StandardCharsets.UTF_8));
       }
       baos.write(("--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8));
-      return BodyPublishers.ofByteArray(baos.toByteArray());
+      return new RepeatableBodyPublisher(baos.toByteArray());
     } catch (IOException e) {
       throw new UncheckedIOException(e);
     }
@@ -260,21 +264,17 @@ public class RestClient {
 
   private <T> ResponseWrapper<T> send(HttpRequest request, ResponseType<T> responseType) {
     HttpResponse.BodyHandler<T> bodyHandler = bodyHandler(responseType.getType());
-
-    try {
-      log.debug("{} {}", request.method(), request.uri());
-
-      HttpResponse<T> response = getHttpClientWithInit().send(request, bodyHandler);
-
-      log.debug("Status: {}", response.statusCode());
-
-      return new ResponseWrapper<>(responseType, response);
-    } catch (IOException e) {
-      throw new RestClientException(e);
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-      throw new RestClientException(e);
-    }
+    byte[] body =
+        request
+            .bodyPublisher()
+            .filter(RepeatableBodyPublisher.class::isInstance)
+            .map(RepeatableBodyPublisher.class::cast)
+            .map(RepeatableBodyPublisher::body)
+            .orElseGet(() -> new byte[0]);
+    HttpResponse<T> response =
+        new FilterContextImpl(filters, this::getHttpClientWithInit)
+            .next(new RestClientRequest(request, body), bodyHandler);
+    return new ResponseWrapper<>(responseType, response);
   }
 
   private synchronized HttpClient getHttpClientWithInit() {
@@ -283,6 +283,31 @@ public class RestClient {
           HttpClient.newBuilder().connectTimeout(Duration.ofMillis(connectTimeoutMillis)).build();
     }
     return httpClient;
+  }
+
+  private static class RepeatableBodyPublisher implements BodyPublisher {
+
+    private final byte[] body;
+    private final BodyPublisher delegate;
+
+    RepeatableBodyPublisher(byte[] body) {
+      this.body = body.clone();
+      this.delegate = BodyPublishers.ofByteArray(this.body);
+    }
+
+    byte[] body() {
+      return body.clone();
+    }
+
+    @Override
+    public long contentLength() {
+      return delegate.contentLength();
+    }
+
+    @Override
+    public void subscribe(Flow.Subscriber<? super ByteBuffer> subscriber) {
+      delegate.subscribe(subscriber);
+    }
   }
 
   @SuppressWarnings("unchecked")

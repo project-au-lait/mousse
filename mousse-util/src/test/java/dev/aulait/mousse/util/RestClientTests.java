@@ -4,6 +4,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
@@ -19,6 +22,7 @@ import lombok.NoArgsConstructor;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 
 class RestClientTests {
 
@@ -195,6 +199,42 @@ class RestClientTests {
     Item result = client.post("/api/items", item, Item.class);
     assertEquals("1", result.getId());
     assertEquals("New Item", result.getName());
+  }
+
+  @Test
+  void loggingFiltersLogRequestAndResponseTest() {
+    Logger requestLogger = (Logger) LoggerFactory.getLogger(RequestLoggingFilter.class);
+    Logger responseLogger = (Logger) LoggerFactory.getLogger(ResponseLoggingFilter.class);
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    requestLogger.addAppender(appender);
+    responseLogger.addAppender(appender);
+
+    String baseUrl = "http://localhost:" + server.getAddress().getPort();
+    RestClient loggingClient =
+        RestClient.builder()
+            .baseUrl(baseUrl)
+            .filters(List.of(new RequestLoggingFilter(), new ResponseLoggingFilter()))
+            .build();
+
+    try {
+      loggingClient.post("/api/items", Item.of("1", "Logged Item"), Item.class);
+
+      List<String> messages =
+          appender.list.stream().map(ILoggingEvent::getFormattedMessage).toList();
+      assertEquals(
+          List.of(
+              "Request method: POST",
+              "Request URI: " + baseUrl + "/api/items",
+              "Request body: {\"id\":\"1\",\"name\":\"Logged Item\"}",
+              "Response status: 200",
+              "Response body: {\"id\":\"1\",\"name\":\"Logged Item\"}"),
+          messages);
+    } finally {
+      requestLogger.detachAppender(appender);
+      responseLogger.detachAppender(appender);
+      appender.stop();
+    }
   }
 
   @Test
