@@ -11,6 +11,8 @@ import com.github.valfirst.slf4jtest.TestLogger;
 import com.github.valfirst.slf4jtest.TestLoggerFactory;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
+import dev.aulait.mousse.util.filter.log.RequestLoggingFilter;
+import dev.aulait.mousse.util.filter.log.ResponseLoggingFilter;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;

@@ -1,5 +1,10 @@
-package dev.aulait.mousse.util;
+package dev.aulait.mousse.util.filter.log;
 
+import dev.aulait.mousse.util.RequestWrapper;
+import dev.aulait.mousse.util.ResponseWrapper;
+import dev.aulait.mousse.util.RestClient;
+import dev.aulait.mousse.util.filter.FilterContext;
+import dev.aulait.mousse.util.filter.RestClientFilter;
 import java.net.http.HttpResponse;
 import lombok.extern.slf4j.Slf4j;
 

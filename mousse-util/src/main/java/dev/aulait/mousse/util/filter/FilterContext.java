@@ -1,4 +1,7 @@
-package dev.aulait.mousse.util;
+package dev.aulait.mousse.util.filter;
+
+import dev.aulait.mousse.util.RequestWrapper;
+import dev.aulait.mousse.util.ResponseWrapper;
 
 /** Continues processing with the next filter, or sends the request at the end of the chain. */
 public interface FilterContext {

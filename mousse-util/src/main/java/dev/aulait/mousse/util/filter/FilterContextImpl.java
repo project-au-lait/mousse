@@ -1,17 +1,21 @@
-package dev.aulait.mousse.util;
+package dev.aulait.mousse.util.filter;
 
+import dev.aulait.mousse.util.RequestWrapper;
+import dev.aulait.mousse.util.ResponseWrapper;
+import dev.aulait.mousse.util.RestClientException;
 import java.io.IOException;
 import java.net.http.HttpClient;
 import java.util.List;
 import java.util.function.Supplier;
 
-class FilterContextImpl implements FilterContext {
+public class FilterContextImpl implements FilterContext {
 
   private final List<RestClientFilter> filters;
   private final Supplier<HttpClient> httpClientSupplier;
   private int index;
 
-  FilterContextImpl(List<RestClientFilter> filters, Supplier<HttpClient> httpClientSupplier) {
+  public FilterContextImpl(
+      List<RestClientFilter> filters, Supplier<HttpClient> httpClientSupplier) {
     this.filters = filters;
     this.httpClientSupplier = httpClientSupplier;
   }
