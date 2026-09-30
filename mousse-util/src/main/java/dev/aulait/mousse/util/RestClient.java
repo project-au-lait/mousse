@@ -1,7 +1,5 @@
 package dev.aulait.mousse.util;
 
-import dev.aulait.mousse.util.filter.FilterContextImpl;
-import dev.aulait.mousse.util.filter.RestClientFilter;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;

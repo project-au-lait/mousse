@@ -1,6 +1,5 @@
 package dev.aulait.mousse.util;
 
-import dev.aulait.mousse.util.filter.RestClientFilter;
 import java.net.http.HttpRequest;
 import java.nio.charset.StandardCharsets;
 import java.util.Objects;

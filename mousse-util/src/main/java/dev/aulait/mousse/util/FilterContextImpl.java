@@ -1,8 +1,5 @@
-package dev.aulait.mousse.util.filter;
+package dev.aulait.mousse.util;
 
-import dev.aulait.mousse.util.RequestWrapper;
-import dev.aulait.mousse.util.ResponseWrapper;
-import dev.aulait.mousse.util.RestClientException;
 import java.io.IOException;
 import java.net.http.HttpClient;
 import java.util.List;

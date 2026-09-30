@@ -1,7 +1,4 @@
-package dev.aulait.mousse.util.filter;
-
-import dev.aulait.mousse.util.RequestWrapper;
-import dev.aulait.mousse.util.ResponseWrapper;
+package dev.aulait.mousse.util;
 
 /** Intercepts a REST request and its response around the actual HTTP call. */
 @FunctionalInterface
