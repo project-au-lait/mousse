@@ -2,55 +2,30 @@ package dev.aulait.mousse.util;
 
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
-import lombok.AccessLevel;
+import java.util.Objects;
 import lombok.Data;
-import lombok.Getter;
 
 @Data
 public class ResponseWrapper<T> {
-  private final ResponseType<T> responseType;
-
-  @Getter(AccessLevel.PACKAGE)
   private final HttpResponse.BodyHandler<T> bodyHandler;
 
   private HttpResponse<T> response;
   private String plainBody;
-  private T parsedBody;
 
-  ResponseWrapper(Class<T> responseType) {
-    this(new ResponseType<>(responseType));
+  ResponseWrapper(HttpResponse.BodyHandler<T> bodyHandler) {
+    this.bodyHandler = bodyHandler;
   }
 
-  ResponseWrapper(JsonType<T> responseType) {
-    this(new ResponseType<>(responseType));
-  }
-
-  private ResponseWrapper(ResponseType<T> responseType) {
-    this.responseType = responseType;
-    this.bodyHandler = bodyHandler(responseType.getType());
-  }
-
-  @SuppressWarnings("unchecked")
-  private HttpResponse.BodyHandler<T> bodyHandler(Class<T> responseType) {
-    if (responseType == byte[].class) {
-      return (HttpResponse.BodyHandler<T>) HttpResponse.BodyHandlers.ofByteArray();
-    } else {
-      return (HttpResponse.BodyHandler<T>)
-          HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8);
-    }
-  }
-
-  @Data
-  public static class ResponseType<T> {
-    private Class<T> type;
-    private JsonType<T> jsonType;
-
-    ResponseType(Class<T> type) {
-      this.type = type;
+  public String bodyAsString() {
+    if (plainBody != null) {
+      return plainBody;
     }
 
-    ResponseType(JsonType<T> jsonType) {
-      this.jsonType = jsonType;
-    }
+    Object body = response.body();
+    plainBody =
+        body instanceof byte[] bytes
+            ? new String(bytes, StandardCharsets.UTF_8)
+            : Objects.toString(body, "");
+    return plainBody;
   }
 }
