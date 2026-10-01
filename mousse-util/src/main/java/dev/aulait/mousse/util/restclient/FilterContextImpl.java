@@ -1,4 +1,4 @@
-package dev.aulait.mousse.util;
+package dev.aulait.mousse.util.restclient;
 
 import java.io.IOException;
 import java.net.http.HttpClient;

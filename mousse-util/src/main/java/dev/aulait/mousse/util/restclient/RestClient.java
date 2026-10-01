@@ -1,5 +1,7 @@
-package dev.aulait.mousse.util;
+package dev.aulait.mousse.util.restclient;
 
+import dev.aulait.mousse.util.JsonType;
+import dev.aulait.mousse.util.JsonUtils;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;

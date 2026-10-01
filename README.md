@@ -116,7 +116,7 @@ UserDto dto = JsonUtils.file2obj(Path.of("user.json"), UserDto.class);
 #### Setup
 
 ```java
-import dev.aulait.mousse.util.RestClient;
+import dev.aulait.mousse.util.restclient.RestClient;
 
 RestClient client = new RestClient("https://api.example.com");
 
@@ -173,7 +173,7 @@ client.delete("/users/{id}", null, Void.class, userId);
 `RestClient` throws `RestClientException` when the response status is not 2xx:
 
 ```java
-import dev.aulait.mousse.util.RestClientException;
+import dev.aulait.mousse.util.restclient.RestClientException;
 
 try {
     UserDto user = client.get("/users/{id}", UserDto.class, userId);

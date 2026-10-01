@@ -1,4 +1,4 @@
-package dev.aulait.mousse.util;
+package dev.aulait.mousse.util.restclient;
 
 public class RestClientException extends RuntimeException {
 

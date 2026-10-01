@@ -1,4 +1,4 @@
-package dev.aulait.mousse.util;
+package dev.aulait.mousse.util.restclient;
 
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;

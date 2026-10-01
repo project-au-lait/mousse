@@ -1,4 +1,4 @@
-package dev.aulait.mousse.util;
+package dev.aulait.mousse.util.restclient;
 
 /** Intercepts a REST request and its response around the actual HTTP call. */
 @FunctionalInterface

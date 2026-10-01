@@ -1,4 +1,4 @@
-package dev.aulait.mousse.util;
+package dev.aulait.mousse.util.restclient;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -11,6 +11,7 @@ import com.github.valfirst.slf4jtest.TestLogger;
 import com.github.valfirst.slf4jtest.TestLoggerFactory;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
+import dev.aulait.mousse.util.JsonType;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
