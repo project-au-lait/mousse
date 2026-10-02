@@ -182,3 +182,41 @@ try {
     String body = e.getBody();
 }
 ```
+
+#### Header logging
+
+Configure header selection and masking on the logging filters:
+
+```java
+import dev.aulait.mousse.util.restclient.HeaderLogConfig;
+import dev.aulait.mousse.util.restclient.RequestLoggingFilter;
+import dev.aulait.mousse.util.restclient.ResponseLoggingFilter;
+import dev.aulait.mousse.util.restclient.RestClient;
+import java.util.List;
+import java.util.Set;
+
+HeaderLogConfig headers = HeaderLogConfig.builder()
+        .includedHeaders(Set.of("Content-Type", "Authorization", "X-Api-Key", "X-Internal"))
+        .excludedHeaders(Set.of("X-Internal"))
+        .maskedHeaders(Set.of("X-Api-Key"))
+        .build();
+
+RestClient client = RestClient.builder()
+        .baseUrl("https://api.example.com")
+        .filters(List.of(new RequestLoggingFilter(headers), new ResponseLoggingFilter(headers)))
+        .build();
+```
+
+- Names are case-insensitive. Rules select included headers, remove excluded headers, then mask
+  the remaining sensitive values. Exclusion takes precedence over inclusion and masking.
+- Omitting `includedHeaders` (or passing `null`) selects all headers. `Set.of()` selects none.
+- Omitting `excludedHeaders` or passing `null` excludes none.
+- `Authorization`, `Proxy-Authorization`, `Cookie`, and `Set-Cookie` are always masked.
+  `maskedHeaders` adds custom sensitive headers; an empty or null set does not disable defaults.
+  Every masked value, including each value of a multi-valued header, becomes `***`.
+- No-argument logging filters use these defaults. This intentionally changes previous behavior,
+  which logged sensitive header values in plain text.
+- Settings are immutable and can be shared, or different settings can be passed to each filter.
+  Header names retain their original spelling; logging never modifies request or response values.
+- Method, URI, status, and body logging are unchanged. Bodies at DEBUG and URIs are **not masked**;
+  avoid putting secrets there when using these filters.

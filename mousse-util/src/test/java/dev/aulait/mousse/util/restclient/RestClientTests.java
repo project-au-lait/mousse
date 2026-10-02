@@ -18,6 +18,7 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -154,6 +155,15 @@ class RestClientTests {
           sendResponse(exchange, 200, body);
         });
 
+    server.createContext(
+        "/api/header-masking",
+        exchange -> {
+          exchange.getResponseHeaders().add("Set-Cookie", "session=first-secret");
+          exchange.getResponseHeaders().add("Set-Cookie", "session=second-secret");
+          exchange.getResponseHeaders().set("X-Api-Key", "response-key-secret");
+          sendResponse(exchange, 200, "{}");
+        });
+
     server.start();
     int port = server.getAddress().getPort();
     client = RestClient.builder().baseUrl("http://localhost:" + port).build();
@@ -261,7 +271,7 @@ class RestClientTests {
       String expectedRequestHeaders =
           "Request headers: {Accept=[*/*], Accept-Language=["
               + Locale.getDefault().toString().replace("_", "-")
-              + "], Authorization=[Bearer test-secret], Content-Type=[application/json;"
+              + "], Authorization=[***], Content-Type=[application/json;"
               + " charset=UTF-8], X-Request-Id=[logging-test]}";
       String expectedResponseHeaders =
           "Response headers: {content-length=[31], content-type=[application/json; charset=UTF-8],"
@@ -320,6 +330,36 @@ class RestClientTests {
       assertInstanceOf(IOException.class, exception.getCause());
       assertFalse(requestLogger.getLoggingEvents().isEmpty());
       assertTrue(responseLogger.getLoggingEvents().isEmpty());
+    }
+
+    @Test
+    @Timeout(10)
+    void loggingFiltersMaskHeadersTest() {
+      String path = "/api/header-masking";
+      HeaderLogConfig config = HeaderLogConfig.builder().maskedHeaders(Set.of("x-api-key")).build();
+      RestClient loggingClient =
+          loggingClientBuilder
+              .clearFilters()
+              .filters(List.of(new RequestLoggingFilter(config), new ResponseLoggingFilter(config)))
+              .header("Authorization", "Bearer test-secret")
+              .header("Cookie", "session=cookie-secret")
+              .header("X-Api-Key", "request-key-secret")
+              .build();
+
+      loggingClient.get(path, String.class);
+
+      String requestMessages = loggingMessagesAsString(requestLogger);
+      String responseMessages = loggingMessagesAsString(responseLogger);
+      assertTrue(requestMessages.contains("Authorization=[***]"));
+      assertTrue(requestMessages.contains("Cookie=[***]"));
+      assertTrue(requestMessages.contains("X-Api-Key=[***]"));
+      assertTrue(responseMessages.contains("set-cookie=[***, ***]"));
+      assertTrue(responseMessages.contains("x-api-key=[***]"));
+    }
+
+    private String loggingMessagesAsString(TestLogger logger) {
+      return String.join(
+          "\n", logger.getLoggingEvents().stream().map(LoggingEvent::getFormattedMessage).toList());
     }
   }
 
