@@ -14,14 +14,16 @@ final class HeaderLogMasker {
 
   HeaderLogMasker() {
     ConfigProviderResolver.instance()
-        .getConfig()
-        .getOptionalValue("mousse.rest-client.logging.masked-headers", String.class)
-        .ifPresent(
-            value ->
-                Arrays.stream(value.split(","))
-                    .map(String::trim)
-                    .filter(header -> !header.isEmpty())
-                    .forEach(maskedHeaders::add));
+      .getConfig()
+      .getOptionalValue("mousse.rest-client.logging.masked-headers", String[].class)
+      .ifPresent(this::configMaskedHeaders);
+  }
+
+  private void configMaskedHeaders(String[] configuredHeaders) {
+    if (configuredHeaders.length <= 0) {
+      return;
+    }
+    Arrays.stream(configuredHeaders).forEach(maskedHeaders::add);
   }
 
   Map<String, List<String>> mask(Map<String, List<String>> headers) {

@@ -20,21 +20,19 @@ final class LoggingItems {
 
   LoggingItems() {
     ConfigProviderResolver.instance()
-        .getConfig()
-        .getOptionalValue("mousse.rest-client.logging.items", String.class)
-        .ifPresent(
-            value -> {
-              Set<Item> configuredItems = EnumSet.noneOf(Item.class);
-              Arrays.stream(value.split(","))
-                  .map(String::trim)
-                  .filter(item -> !item.isEmpty())
-                  .map(item -> Item.valueOf(item.toUpperCase(Locale.ROOT)))
-                  .forEach(configuredItems::add);
-              if (!configuredItems.isEmpty()) {
-                items.clear();
-                items.addAll(configuredItems);
-              }
-            });
+      .getConfig()
+      .getOptionalValue("mousse.rest-client.logging.items", String[].class)
+      .ifPresent(this::configLoggingItems);
+  }
+
+  private void configLoggingItems(String[] configuredItems) {
+    if (configuredItems.length <= 0) {
+      return;
+    }
+    items.clear();
+    Arrays.stream(configuredItems)
+        .map(item -> Item.valueOf(item.toUpperCase(Locale.ROOT)))
+        .forEach(items::add);
   }
 
   boolean includes(Item item) {
