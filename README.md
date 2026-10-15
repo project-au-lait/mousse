@@ -209,10 +209,11 @@ the actual request and response headers remain unchanged.
 Header names are case-insensitive. If omitted or empty, no headers are masked.
 Bodies and URIs are not masked.
 
-To log only selected items, set a comma-separated list in `application.properties`:
+Select request and response log items with comma-separated lists in `application.properties`:
 
 ```properties
-mousse.rest-client.logging.items=status,method,uri
+mousse.rest-client.logging.request.items=method,uri
+mousse.rest-client.logging.response.items=status,body
 ```
 
 | Item     | Request     | Response    | Log level |
@@ -223,6 +224,12 @@ mousse.rest-client.logging.items=status,method,uri
 | `method` | HTTP method |             | INFO      |
 | `uri`    | Request URI |             | INFO      |
 
-Only listed items are logged. If omitted or empty, all items are enabled.
+If omitted or empty, all items for that direction are enabled.
 Item names are case-insensitive. Enable DEBUG logging to include bodies.
-Header masking also applies when `header` is selected.
+
+Set `none` by itself to disable all log items for that direction:
+
+```properties
+mousse.rest-client.logging.request.items=none
+mousse.rest-client.logging.response.items=none
+```

@@ -294,8 +294,9 @@ class RestClientTests {
     @Test
     void loggingFiltersSelectItemsTest() {
       withLoggingConfig(
-          "mousse.rest-client.logging.items",
-          "method,status",
+          java.util.Map.of(
+              "mousse.rest-client.logging.request.items", "method",
+              "mousse.rest-client.logging.response.items", "status"),
           () -> {
             assertEquals(42, loggingClientBuilder.build().get("/api/count", Integer.class));
             assertEquals(
@@ -303,6 +304,19 @@ class RestClientTests {
                 TestLoggerFactory.getAllLoggingEvents().stream()
                     .map(LoggingEvent::getFormattedMessage)
                     .toList());
+          });
+    }
+
+    @Test
+    void loggingFiltersDisableAllItemsTest() {
+      withLoggingConfig(
+          java.util.Map.of(
+              "mousse.rest-client.logging.request.items", "none",
+              "mousse.rest-client.logging.response.items", "NONE"),
+          () -> {
+            assertEquals(42, loggingClientBuilder.build().get("/api/count", Integer.class));
+            assertTrue(requestLogger.getLoggingEvents().isEmpty());
+            assertTrue(responseLogger.getLoggingEvents().isEmpty());
           });
     }
 
@@ -333,7 +347,11 @@ class RestClientTests {
     }
 
     private void withLoggingConfig(String property, String value, Runnable action) {
-      Config config = new SmallRyeConfigBuilder().withDefaultValue(property, value).build();
+      withLoggingConfig(java.util.Map.of(property, value), action);
+    }
+
+    private void withLoggingConfig(java.util.Map<String, String> properties, Runnable action) {
+      Config config = new SmallRyeConfigBuilder().withDefaultValues(properties).build();
       ConfigProviderResolver resolver = ConfigProviderResolver.instance();
       ClassLoader originalClassLoader = Thread.currentThread().getContextClassLoader();
       ClassLoader testClassLoader = new ClassLoader(originalClassLoader) {};

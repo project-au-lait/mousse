@@ -6,23 +6,18 @@ import java.util.Locale;
 import java.util.Set;
 import org.eclipse.microprofile.config.spi.ConfigProviderResolver;
 
-final class LoggingItems {
+abstract class LoggingItems<E extends Enum<E>> {
 
-  enum Item {
-    STATUS,
-    HEADER,
-    BODY,
-    METHOD,
-    URI
-  }
+  private final Class<E> itemType;
+  private final Set<E> items;
 
-  private final Set<Item> items = EnumSet.allOf(Item.class);
-
-  LoggingItems() {
+  LoggingItems(Class<E> itemType, String configProperty) {
+    this.itemType = itemType;
+    items = EnumSet.allOf(itemType);
     ConfigProviderResolver.instance()
-      .getConfig()
-      .getOptionalValue("mousse.rest-client.logging.items", String[].class)
-      .ifPresent(this::configLoggingItems);
+        .getConfig()
+        .getOptionalValue(configProperty, String[].class)
+        .ifPresent(this::configLoggingItems);
   }
 
   private void configLoggingItems(String[] configuredItems) {
@@ -30,12 +25,15 @@ final class LoggingItems {
       return;
     }
     items.clear();
+    if (configuredItems.length == 1 && "none".equalsIgnoreCase(configuredItems[0])) {
+      return;
+    }
     Arrays.stream(configuredItems)
-        .map(item -> Item.valueOf(item.toUpperCase(Locale.ROOT)))
+        .map(item -> Enum.valueOf(itemType, item.toUpperCase(Locale.ROOT)))
         .forEach(items::add);
   }
 
-  boolean includes(Item item) {
+  boolean includes(E item) {
     return items.contains(item);
   }
 }
