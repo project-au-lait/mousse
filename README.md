@@ -198,17 +198,6 @@ RestClient client = RestClient.builder()
     .build();
 ```
 
-Configure the headers to mask in `application.properties`:
-
-```properties
-mousse.rest-client.logging.masked-headers=Authorization,Cookie,Set-Cookie,X-Api-Key
-```
-
-Both filters replace the listed headers' values with `<hidden>` in logs only;
-the actual request and response headers remain unchanged.
-Header names are case-insensitive. If omitted or empty, no headers are masked.
-Bodies and URIs are not masked.
-
 Select request and response log items with comma-separated lists in `application.properties`:
 
 ```properties
@@ -233,3 +222,14 @@ Set `none` by itself to disable all log items for that direction:
 mousse.rest-client.logging.request.items=none
 mousse.rest-client.logging.response.items=none
 ```
+
+Configure the headers to mask in `application.properties`:
+
+```properties
+mousse.rest-client.logging.masked-headers=Authorization,Cookie,Set-Cookie,X-Api-Key
+```
+
+Both filters replace the listed headers' values with `<hidden>` in logs only;
+the actual request and response headers remain unchanged.
+Header names are case-insensitive. If omitted or empty, no headers are masked.
+Bodies and URIs are not masked.
