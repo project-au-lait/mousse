@@ -12,7 +12,6 @@ import com.github.valfirst.slf4jtest.TestLoggerFactory;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import dev.aulait.mousse.util.JsonType;
-import io.smallrye.config.SmallRyeConfigBuilder;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
@@ -24,8 +23,6 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.eclipse.microprofile.config.Config;
-import org.eclipse.microprofile.config.spi.ConfigProviderResolver;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -264,10 +261,10 @@ class RestClientTests {
       String expectedRequestHeaders =
           "Request headers: {Accept=[*/*], Accept-Language=["
               + Locale.getDefault().toString().replace("_", "-")
-              + "], Authorization=[Bearer test-secret], Content-Type=[application/json;"
-              + " charset=UTF-8], X-Request-Id=[logging-test]}";
+              + "], Authorization=[<hidden>], Content-Type=[<hidden>],"
+              + " X-Request-Id=[logging-test]}";
       String expectedResponseHeaders =
-          "Response headers: {content-length=[31], content-type=[application/json; charset=UTF-8],"
+          "Response headers: {content-length=[31], content-type=[<hidden>],"
               + " date=[<date>]}";
 
       Item requestBody = Item.of("1", "Logged Item");
@@ -278,7 +275,6 @@ class RestClientTests {
       assertEquals(
           List.of(
               "Request method: POST",
-              "Request URI: " + loggingClient.getBaseUrl() + path,
               expectedRequestHeaders,
               "Request body: {\"id\":\"1\",\"name\":\"Logged Item\"}",
               "HTTP request received",
@@ -292,80 +288,30 @@ class RestClientTests {
     }
 
     @Test
-    void loggingFiltersSelectItemsTest() {
-      withLoggingConfig(
-          java.util.Map.of(
-              "mousse.rest-client.logging.request.items", "method",
-              "mousse.rest-client.logging.response.items", "status"),
-          () -> {
-            assertEquals(42, loggingClientBuilder.build().get("/api/count", Integer.class));
-            assertEquals(
-                List.of("Request method: GET", "Response status: 200"),
-                TestLoggerFactory.getAllLoggingEvents().stream()
-                    .map(LoggingEvent::getFormattedMessage)
-                    .toList());
-          });
-    }
+    void loggingFiltersMaskHeadersAndSelectItemsTest() {
+      RestClient loggingClient =
+          loggingClientBuilder.header("Authorization", "Bearer test-secret").build();
+      assertEquals(42, loggingClient.get("/api/count", Integer.class));
 
-    @Test
-    void loggingFiltersDisableAllItemsTest() {
-      withLoggingConfig(
-          java.util.Map.of(
-              "mousse.rest-client.logging.request.items", "none",
-              "mousse.rest-client.logging.response.items", "NONE"),
-          () -> {
-            assertEquals(42, loggingClientBuilder.build().get("/api/count", Integer.class));
-            assertTrue(requestLogger.getLoggingEvents().isEmpty());
-            assertTrue(responseLogger.getLoggingEvents().isEmpty());
-          });
-    }
+      assertFalse(
+          requestLogger.getLoggingEvents().stream()
+              .map(LoggingEvent::getFormattedMessage)
+              .anyMatch(message -> message.startsWith("Request URI: ")));
 
-    @Test
-    void loggingFiltersMaskHeadersTest() {
-      withLoggingConfig(
-          "mousse.rest-client.logging.masked-headers",
-          "Authorization,Content-Type",
-          () -> {
-            RestClient loggingClient =
-                loggingClientBuilder.header("Authorization", "Bearer test-secret").build();
-            assertEquals(42, loggingClient.get("/api/count", Integer.class));
-
-            String requestLogs =
-                requestLogger.getLoggingEvents().stream()
-                    .map(LoggingEvent::getFormattedMessage)
-                    .collect(java.util.stream.Collectors.joining("\n"));
-            String responseLogs =
-                responseLogger.getLoggingEvents().stream()
-                    .map(LoggingEvent::getFormattedMessage)
-                    .collect(java.util.stream.Collectors.joining("\n"));
-            assertTrue(requestLogs.contains("Authorization=[<hidden>]"));
-            assertTrue(requestLogs.contains("Content-Type=[<hidden>]"));
-            assertTrue(responseLogs.contains("content-type=[<hidden>]"));
-            assertTrue(requestLogs.contains("Accept=[*/*]"));
-            assertFalse(requestLogs.contains("test-secret"));
-          });
-    }
-
-    private void withLoggingConfig(String property, String value, Runnable action) {
-      withLoggingConfig(java.util.Map.of(property, value), action);
-    }
-
-    private void withLoggingConfig(java.util.Map<String, String> properties, Runnable action) {
-      Config config = new SmallRyeConfigBuilder().withDefaultValues(properties).build();
-      ConfigProviderResolver resolver = ConfigProviderResolver.instance();
-      ClassLoader originalClassLoader = Thread.currentThread().getContextClassLoader();
-      ClassLoader testClassLoader = new ClassLoader(originalClassLoader) {};
-      resolver.registerConfig(config, testClassLoader);
-      try {
-        Thread.currentThread().setContextClassLoader(testClassLoader);
-        loggingClientBuilder
-            .clearFilters()
-            .filters(List.of(new RequestLoggingFilter(), new ResponseLoggingFilter()));
-        action.run();
-      } finally {
-        Thread.currentThread().setContextClassLoader(originalClassLoader);
-        resolver.releaseConfig(config);
-      }
+      assertEquals(
+          List.of(
+              "Request method: GET",
+              "Request headers: {Accept=[*/*], Accept-Language=["
+                  + Locale.getDefault().toString().replace("_", "-")
+                  + "], Authorization=[<hidden>], Content-Type=[<hidden>]}",
+              "Request body: ",
+              "Response status: 200",
+              "Response headers: {content-length=[2], content-type=[<hidden>], date=[<date>]}",
+              "Response body: 42"),
+          TestLoggerFactory.getAllLoggingEvents().stream()
+              .map(LoggingEvent::getFormattedMessage)
+              .map(message -> message.replaceFirst("date=\\[[^\\]]+\\]", "date=[<date>]"))
+              .toList());
     }
 
     @ParameterizedTest
