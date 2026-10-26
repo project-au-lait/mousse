@@ -187,57 +187,18 @@ try {
 
 ##### Configuration prerequisites
 
-The logging filters read settings through the **MicroProfile Config API**, using
-`ConfigProviderResolver` and `Config.getOptionalValue`. Mousse declares
-`org.eclipse.microprofile.config:microprofile-config-api:3.1.1` as a provided,
-optional dependency; it does not bundle a configuration implementation.
-Even when no logging settings are specified, using these filters requires both
-the API and a compatible implementation at runtime.
+The logging filters use the **MicroProfile Config API**.
+The required dependencies and configuration file depend on whether your runtime provides
+MicroProfile Config:
 
-[MicroProfile Config](https://download.eclipse.org/microprofile/microprofile-config-3.1/microprofile-config-spec-3.1.html)
-defines the configuration API, provider discovery, type conversion (including
-comma-separated values to arrays), and default configuration sources:
-
-- Java system properties
-- Environment variables
-- `META-INF/microprofile-config.properties` on the classpath
-
-Mousse's property names, supported log items,
-`none` handling, and masking behavior are Mousse-specific, not part of that specification.
-
-Use a MicroProfile Config implementation compatible with the API version above,
-such as **SmallRye Config**, or a runtime that already provides one. An API-only
-dependency is insufficient. A different configuration library is usable only if
-it also exposes settings through a MicroProfile Config provider or `ConfigSource`;
-merely supporting properties files is not enough.
-
-For a standalone Java application, one option is to add SmallRye Config Core:
-
-```xml
-<dependency>
-  <groupId>io.smallrye.config</groupId>
-  <artifactId>smallrye-config-core</artifactId>
-  <version>3.12.4</version>
-</dependency>
-```
-
-This supplies an implementation and its transitive API dependency. If your runtime
-already provides MicroProfile Config (for example, Quarkus), use its managed
-dependencies rather than adding a second implementation.
-The filters also require SLF4J API and an application-selected logging provider.
-
-##### Configuration file location
-
-For a standard Maven application, place settings in
-`src/main/resources/META-INF/microprofile-config.properties`. Maven copies this to
-the classpath as `META-INF/microprofile-config.properties`, where a MicroProfile
-Config implementation discovers it automatically.
-
-`application.properties` is **not** a standard MicroProfile Config file name.
-Frameworks may support additional sources: for example, Quarkus reads
-`src/main/resources/application.properties` and exposes its values through
-MicroProfile Config. Outside such a framework, use the standard path above unless
-you explicitly configure another source.
+- **MicroProfile Config-compatible framework:**
+  The framework provides the API and implementation, so no additional MicroProfile Config dependencies are needed.
+  Use the framework's documentation for its supported configuration files and sources.
+  For example, in Quarkus, put settings in `src/main/resources/application.properties`.
+- **Other runtime or standalone Java application:**
+  Add the `microprofile-config-api` dependency and a compatible implementation,
+  such as SmallRye Config or Apache Geronimo Config.
+  Put settings in `META-INF/microprofile-config.properties` on the classpath.
 
 ##### Registering filters
 
@@ -254,12 +215,23 @@ RestClient client = RestClient.builder()
     .build();
 ```
 
-Select request and response log items with comma-separated lists in
-`META-INF/microprofile-config.properties` (or your framework's supported configuration source):
+##### Configuration properties
+
+Set the following properties in `META-INF/microprofile-config.properties`
+(or your framework's supported configuration source):
+
+| Property                                    | Description                                                                       | Allowed values                                                                                    | Default (omitted or empty) |
+| ------------------------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | -------------------------- |
+| `mousse.rest-client.logging.request.items`  | Selects request details to log                                                    | Comma-separated `method`, `uri`, `header`, `body`; or `none` by itself to disable request logging | All request items          |
+| `mousse.rest-client.logging.response.items` | Selects response details to log                                                   | Comma-separated `status`, `header`, `body`; or `none` by itself to disable response logging       | All response items         |
+| `mousse.rest-client.logging.masked-headers` | Replaces the specified request and response header values with `<hidden>` in logs | Comma-separated header names to mask, e.g. `Authorization,Cookie,Set-Cookie,X-Api-Key`            | No headers masked          |
+
+Item names and header names are case-insensitive. For example:
 
 ```properties
 mousse.rest-client.logging.request.items=method,uri
 mousse.rest-client.logging.response.items=status,body
+mousse.rest-client.logging.masked-headers=Authorization,Cookie,Set-Cookie,X-Api-Key
 ```
 
 | Item     | Request     | Response    | Log level |
@@ -270,23 +242,5 @@ mousse.rest-client.logging.response.items=status,body
 | `method` | HTTP method |             | INFO      |
 | `uri`    | Request URI |             | INFO      |
 
-If omitted or empty, all items for that direction are enabled.
-Item names are case-insensitive. Enable DEBUG logging to include bodies.
-
-Set `none` by itself to disable all log items for that direction:
-
-```properties
-mousse.rest-client.logging.request.items=none
-mousse.rest-client.logging.response.items=none
-```
-
-Configure the headers to mask in the same configuration file:
-
-```properties
-mousse.rest-client.logging.masked-headers=Authorization,Cookie,Set-Cookie,X-Api-Key
-```
-
-Both filters replace the listed headers' values with `<hidden>` in logs only;
-the actual request and response headers remain unchanged.
-Header names are case-insensitive. If omitted or empty, no headers are masked.
-Bodies and URIs are not masked.
+Bodies are logged at DEBUG level. Set the logging output level to DEBUG to
+include them in the logs.
