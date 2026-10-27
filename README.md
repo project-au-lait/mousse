@@ -182,3 +182,66 @@ try {
     String body = e.getBody();
 }
 ```
+
+#### Logging and header masking
+
+##### Configuration prerequisites
+
+The logging filters use the **MicroProfile Config API**.
+The required dependencies and configuration file depend on whether your runtime provides
+MicroProfile Config:
+
+- **MicroProfile Config-compatible framework:**
+  The framework provides the API and implementation, so no additional MicroProfile Config dependencies are needed.
+  Use the framework's documentation for its supported configuration files and sources.
+  For example, in Quarkus, put settings in `application.properties` on the classpath.
+  For more details, refer to the [Quarkus configuration reference](https://quarkus.io/guides/config-reference/#application-properties-file).
+- **Other runtime or standalone Java application:**
+  Add the `microprofile-config-api` dependency and a compatible implementation,
+  such as SmallRye Config or Apache Geronimo Config.
+  Put settings in `META-INF/microprofile-config.properties` on the classpath.
+
+##### Registering filters
+
+Register logging filters to log request and response details:
+
+```java
+import dev.aulait.mousse.util.restclient.RequestLoggingFilter;
+import dev.aulait.mousse.util.restclient.ResponseLoggingFilter;
+
+RestClient client = RestClient.builder()
+    .baseUrl("https://api.example.com")
+    .filter(new RequestLoggingFilter())
+    .filter(new ResponseLoggingFilter())
+    .build();
+```
+
+##### Configuration properties
+
+Set the following properties in `META-INF/microprofile-config.properties` on the classpath.
+(or your framework's supported configuration source):
+
+| Property                                    | Description                                                                       | Allowed values                                                                                    | Default (omitted or empty) |
+| ------------------------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | -------------------------- |
+| `mousse.rest-client.logging.request.items`  | Selects request details to log                                                    | Comma-separated `method`, `uri`, `header`, `body`; or `none` by itself to disable request logging | All request items          |
+| `mousse.rest-client.logging.response.items` | Selects response details to log                                                   | Comma-separated `status`, `header`, `body`; or `none` by itself to disable response logging       | All response items         |
+| `mousse.rest-client.logging.masked-headers` | Replaces the specified request and response header values with `<hidden>` in logs | Comma-separated header names to mask, e.g. `Authorization,Cookie,Set-Cookie,X-Api-Key`            | No headers masked          |
+
+Item names and header names are case-insensitive. For example:
+
+```properties
+mousse.rest-client.logging.request.items=method,uri
+mousse.rest-client.logging.response.items=status,body
+mousse.rest-client.logging.masked-headers=Authorization,Cookie,Set-Cookie,X-Api-Key
+```
+
+| Item     | Request     | Response    | Log level |
+| -------- | ----------- | ----------- | --------- |
+| `status` |             | Status code | INFO      |
+| `header` | Headers     | Headers     | INFO      |
+| `body`   | Body        | Body        | DEBUG     |
+| `method` | HTTP method |             | INFO      |
+| `uri`    | Request URI |             | INFO      |
+
+Bodies are logged at DEBUG level. Set the logging output level to DEBUG to
+include them in the logs.

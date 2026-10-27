@@ -261,10 +261,10 @@ class RestClientTests {
       String expectedRequestHeaders =
           "Request headers: {Accept=[*/*], Accept-Language=["
               + Locale.getDefault().toString().replace("_", "-")
-              + "], Authorization=[Bearer test-secret], Content-Type=[application/json;"
-              + " charset=UTF-8], X-Request-Id=[logging-test]}";
+              + "], Authorization=[<hidden>], Content-Type=[<hidden>],"
+              + " X-Request-Id=[logging-test]}";
       String expectedResponseHeaders =
-          "Response headers: {content-length=[31], content-type=[application/json; charset=UTF-8],"
+          "Response headers: {content-length=[31], content-type=[<hidden>],"
               + " date=[<date>]}";
 
       Item requestBody = Item.of("1", "Logged Item");
@@ -275,13 +275,39 @@ class RestClientTests {
       assertEquals(
           List.of(
               "Request method: POST",
-              "Request URI: " + loggingClient.getBaseUrl() + path,
               expectedRequestHeaders,
               "Request body: {\"id\":\"1\",\"name\":\"Logged Item\"}",
               "HTTP request received",
               "Response status: 200",
               expectedResponseHeaders,
               "Response body: {\"id\":\"1\",\"name\":\"Logged Item\"}"),
+          TestLoggerFactory.getAllLoggingEvents().stream()
+              .map(LoggingEvent::getFormattedMessage)
+              .map(message -> message.replaceFirst("date=\\[[^\\]]+\\]", "date=[<date>]"))
+              .toList());
+    }
+
+    @Test
+    void loggingFiltersMaskHeadersAndSelectItemsTest() {
+      RestClient loggingClient =
+          loggingClientBuilder.header("Authorization", "Bearer test-secret").build();
+      assertEquals(42, loggingClient.get("/api/count", Integer.class));
+
+      assertFalse(
+          requestLogger.getLoggingEvents().stream()
+              .map(LoggingEvent::getFormattedMessage)
+              .anyMatch(message -> message.startsWith("Request URI: ")));
+
+      assertEquals(
+          List.of(
+              "Request method: GET",
+              "Request headers: {Accept=[*/*], Accept-Language=["
+                  + Locale.getDefault().toString().replace("_", "-")
+                  + "], Authorization=[<hidden>], Content-Type=[<hidden>]}",
+              "Request body: ",
+              "Response status: 200",
+              "Response headers: {content-length=[2], content-type=[<hidden>], date=[<date>]}",
+              "Response body: 42"),
           TestLoggerFactory.getAllLoggingEvents().stream()
               .map(LoggingEvent::getFormattedMessage)
               .map(message -> message.replaceFirst("date=\\[[^\\]]+\\]", "date=[<date>]"))
