@@ -194,7 +194,8 @@ MicroProfile Config:
 - **MicroProfile Config-compatible framework:**
   The framework provides the API and implementation, so no additional MicroProfile Config dependencies are needed.
   Use the framework's documentation for its supported configuration files and sources.
-  For example, in Quarkus, put settings in `src/main/resources/application.properties`.
+  For example, in Quarkus, put settings in `application.properties` on the classpath.
+  For more details, refer to the [Quarkus configuration reference](https://quarkus.io/guides/config-reference/#application-properties-file).
 - **Other runtime or standalone Java application:**
   Add the `microprofile-config-api` dependency and a compatible implementation,
   such as SmallRye Config or Apache Geronimo Config.
@@ -217,7 +218,7 @@ RestClient client = RestClient.builder()
 
 ##### Configuration properties
 
-Set the following properties in `META-INF/microprofile-config.properties`
+Set the following properties in `META-INF/microprofile-config.properties` on the classpath.
 (or your framework's supported configuration source):
 
 | Property                                    | Description                                                                       | Allowed values                                                                                    | Default (omitted or empty) |
