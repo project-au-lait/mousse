@@ -67,6 +67,34 @@ public class JsonUtils {
   }
 
   /**
+   * Writes an object to a JSON file.
+   *
+   * @param obj the object to be written to the file
+   * @param filePath the path to the JSON file
+   */
+  public static void obj2file(Object obj, Path filePath) {
+    try {
+      MAPPER.writeValue(filePath.toFile(), obj);
+    } catch (IOException e) {
+      throw new UncheckedIOException(e);
+    }
+  }
+
+  /**
+   * Writes an object to a JSON file with pretty-print formatting.
+   *
+   * @param obj the object to be written to the file
+   * @param filePath the path to the JSON file
+   */
+  public static void obj2fmtfile(Object obj, Path filePath) {
+    try {
+      MAPPER.writerWithDefaultPrettyPrinter().writeValue(filePath.toFile(), obj);
+    } catch (IOException e) {
+      throw new UncheckedIOException(e);
+    }
+  }
+
+  /**
    * Reads a JSON file and converts its content to an object of the specified class.
    *
    * @param <T> the type of the object to be returned
