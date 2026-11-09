@@ -4,6 +4,7 @@ Mousse is a lightweight Java utility library that provides the following feature
 
 - **BeanUtils**: Bean mapping between different types using ModelMapper
 - **JsonUtils**: JSON serialization and deserialization using Jackson
+- **ExecUtils**: External command execution with output, exit-code, working-directory, and environment support
 - **RestClient**: HTTP REST client using Java's built-in `HttpClient`
 
 ## Required Software
@@ -106,6 +107,37 @@ JsonUtils.obj2file(dto, Path.of("user.json"));
 // Read
 UserDto dto = JsonUtils.file2obj(Path.of("user.json"), UserDto.class);
 ```
+
+---
+
+### ExecUtils
+
+`ExecUtils` executes external commands and can return captured output and exit codes.
+On macOS and Linux, commands run through an interactive login shell; on Windows, they run through `cmd`.
+
+#### Capture command output
+
+```java
+import dev.aulait.mousse.util.exec.ExecUtils;
+import java.util.Map;
+
+String output = ExecUtils.execWithStdout("echo ${message}", Map.of("message", "Hello"));
+```
+
+Use `ExecUtils.exec(...)` to receive an `ExecResult` containing the exit code, standard output, and standard error:
+
+```java
+import dev.aulait.mousse.util.exec.ExecResult;
+
+ExecResult result = ExecUtils.exec("echo Hello");
+int exitCode = result.getExitCode();
+String stdout = result.getStdout();
+String stderr = result.getStderr();
+```
+
+Overloads can set a working directory or environment variables. `ExecParam` can be used to configure all execution options.
+Commands that cannot be started or exit with a non-zero status throw `UncheckedIOException`.
+Commands are interpreted by a shell, so only use trusted command strings and validate values substituted into them.
 
 ---
 
