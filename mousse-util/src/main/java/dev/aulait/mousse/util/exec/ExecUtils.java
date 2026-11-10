@@ -173,8 +173,8 @@ public class ExecUtils {
   }
 
   /**
-   * Parse command line depending on OS to CommandLine instance with activation of interactive/login
-   * shell.
+   * Parses a command using the OS-specific shell, with a non-interactive login shell on macOS and
+   * Linux.
    *
    * @param command the command to parse
    * @return the parsed CommandLine
@@ -183,7 +183,7 @@ public class ExecUtils {
     if (SystemUtils.IS_OS_WINDOWS) {
       return new CommandLine("cmd").addArgument("/c").addArgument(command, false);
     } else if (SystemUtils.IS_OS_MAC) {
-      return new CommandLine("zsh").addArgument("-lic").addArgument(command, false);
+      return new CommandLine("zsh").addArgument("-lc").addArgument(command, false);
     } else if (SystemUtils.IS_OS_LINUX) {
       return new CommandLine("bash").addArgument("-lc").addArgument(command, false);
     }

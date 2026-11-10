@@ -11,12 +11,24 @@ import java.util.Map;
 import org.apache.commons.lang3.SystemUtils;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 
 class ExecUtilsTests {
 
   @Nested
   class ExecTests {
+
+    @Test
+    @EnabledOnOs({OS.MAC, OS.LINUX})
+    void shellRunsNonInteractivelyTest() {
+      ExecResult result =
+          ExecUtils.exec("case $- in *i*) echo interactive ;; *) echo non-interactive ;; esac");
+
+      assertEquals(0, result.getExitCode());
+      assertTrue(result.getStdout().endsWith("non-interactive"));
+    }
 
     @Test
     void commandReturnsExitCodeAndOutputTest() {
@@ -28,17 +40,14 @@ class ExecUtilsTests {
 
     @Test
     void substitutionMapReplacesCommandValueTest() {
-      ExecResult result =
-          ExecUtils.exec("echo ${value}", Map.of("value", "substituted-output"));
+      ExecResult result = ExecUtils.exec("echo ${value}", Map.of("value", "substituted-output"));
 
       assertTrue(result.getStdout().endsWith("substituted-output"));
     }
 
     @Test
-    void workingDirectoryRunsCommandThereTest(@TempDir Path workingDirectory)
-        throws IOException {
-      ExecResult result =
-          ExecUtils.exec(workingDirectoryCommand(), Map.of(), workingDirectory);
+    void workingDirectoryRunsCommandThereTest(@TempDir Path workingDirectory) throws IOException {
+      ExecResult result = ExecUtils.exec(workingDirectoryCommand(), Map.of(), workingDirectory);
 
       assertTrue(result.getStdout().endsWith(workingDirectory.toRealPath().toString()));
     }
@@ -47,7 +56,9 @@ class ExecUtilsTests {
     void environmentPassesVariablesToCommandTest() {
       ExecResult result =
           ExecUtils.exec(
-              environmentValueCommand(), Map.of(), Map.of("MOUSSE_EXEC_TEST", "environment-output"));
+              environmentValueCommand(),
+              Map.of(),
+              Map.of("MOUSSE_EXEC_TEST", "environment-output"));
 
       assertTrue(result.getStdout().endsWith("environment-output"));
     }
@@ -71,15 +82,13 @@ class ExecUtilsTests {
 
     @Test
     void returnsCommandOutputTest() {
-      String output =
-          ExecUtils.execWithStdout("echo ${value}", Map.of("value", "stdout-output"));
+      String output = ExecUtils.execWithStdout("echo ${value}", Map.of("value", "stdout-output"));
 
       assertTrue(output.endsWith("stdout-output"));
     }
 
     @Test
-    void workingDirectoryRunsCommandThereTest(@TempDir Path workingDirectory)
-        throws IOException {
+    void workingDirectoryRunsCommandThereTest(@TempDir Path workingDirectory) throws IOException {
       String output =
           ExecUtils.execWithStdout(workingDirectoryCommand(), Map.of(), workingDirectory);
 
@@ -114,8 +123,7 @@ class ExecUtilsTests {
     void nonZeroExitIncludesCapturedStandardOutputAndErrorTest() {
       UncheckedIOException exception =
           assertThrows(
-              UncheckedIOException.class,
-              () -> ExecUtils.exec(commandWithOutputAndNonZeroExit()));
+              UncheckedIOException.class, () -> ExecUtils.exec(commandWithOutputAndNonZeroExit()));
 
       assertTrue(exception.getMessage().contains("exec-stdout"));
       assertTrue(exception.getMessage().contains("exec-stderr"));
